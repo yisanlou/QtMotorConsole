@@ -1,0 +1,209 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>QtMotorConsoleClass</class>
+ <widget class="QWidget" name="QtMotorConsoleClass">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>920</width>
+    <height>660</height>
+   </rect>
+  </property>
+  <property name="font">
+   <font>
+    <pointsize>10</pointsize>
+   </font>
+  </property>
+  <property name="windowTitle">
+   <string>电机控制上位机</string>
+  </property>
+
+  <widget class="QPushButton" name="pushButton_OpenCard">
+   <property name="geometry"><rect><x>20</x><y>20</y><width>160</width><height>58</height></rect></property>
+   <property name="font"><font><pointsize>15</pointsize></font></property>
+   <property name="text"><string>打开控制卡</string></property>
+  </widget>
+  <widget class="QTextBrowser" name="textBrowser_Log">
+   <property name="geometry"><rect><x>190</x><y>20</y><width>590</width><height>58</height></rect></property>
+   <property name="font"><font><pointsize>9</pointsize></font></property>
+  </widget>
+  <widget class="QPushButton" name="pushButton_Stop">
+   <property name="geometry"><rect><x>790</x><y>20</y><width>110</width><height>58</height></rect></property>
+   <property name="font"><font><pointsize>18</pointsize></font></property>
+   <property name="text"><string>停止</string></property>
+  </widget>
+
+  <widget class="QGroupBox" name="groupBox_Display">
+   <property name="geometry"><rect><x>20</x><y>95</y><width>250</width><height>140</height></rect></property>
+   <property name="title"><string>曲线显示</string></property>
+   <widget class="QCheckBox" name="checkBox_Pos">
+    <property name="geometry"><rect><x>20</x><y>30</y><width>190</width><height>24</height></rect></property>
+    <property name="text"><string>位置(kpulse)</string></property>
+    <property name="styleSheet"><string>color: green;</string></property>
+    <property name="checked"><bool>true</bool></property>
+   </widget>
+   <widget class="QCheckBox" name="checkBox_Vel">
+    <property name="geometry"><rect><x>20</x><y>65</y><width>190</width><height>24</height></rect></property>
+    <property name="text"><string>速度(pulse/s)</string></property>
+    <property name="styleSheet"><string>color: blue;</string></property>
+   </widget>
+   <widget class="QCheckBox" name="checkBox_Torque">
+    <property name="geometry"><rect><x>20</x><y>100</y><width>190</width><height>24</height></rect></property>
+    <property name="text"><string>力矩(0.1%)</string></property>
+    <property name="styleSheet"><string>color: red;</string></property>
+   </widget>
+  </widget>
+
+  <widget class="QGroupBox" name="groupBox_Axis">
+   <property name="geometry"><rect><x>20</x><y>245</y><width>250</width><height>135</height></rect></property>
+   <property name="title"><string>电机选择</string></property>
+   <widget class="QRadioButton" name="radioButton_Motor1">
+    <property name="geometry"><rect><x>20</x><y>32</y><width>90</width><height>24</height></rect></property>
+    <property name="text"><string>电机1</string></property>
+    <property name="checked"><bool>true</bool></property>
+   </widget>
+   <widget class="QRadioButton" name="radioButton_Motor2">
+    <property name="geometry"><rect><x>120</x><y>32</y><width>90</width><height>24</height></rect></property>
+    <property name="text"><string>电机2</string></property>
+   </widget>
+   <widget class="QPushButton" name="pushButton_DisableMotor1">
+    <property name="geometry"><rect><x>20</x><y>78</y><width>95</width><height>30</height></rect></property>
+    <property name="text"><string>失能电机1</string></property>
+   </widget>
+   <widget class="QPushButton" name="pushButton_DisableMotor2">
+    <property name="geometry"><rect><x>135</x><y>78</y><width>95</width><height>30</height></rect></property>
+    <property name="text"><string>失能电机2</string></property>
+   </widget>
+  </widget>
+
+  <widget class="QGroupBox" name="groupBox_Record">
+   <property name="geometry"><rect><x>20</x><y>390</y><width>250</width><height>76</height></rect></property>
+   <property name="title"><string>数据记录</string></property>
+   <widget class="QPushButton" name="pushButton_StartRecord">
+    <property name="geometry"><rect><x>20</x><y>30</y><width>95</width><height>30</height></rect></property>
+    <property name="text"><string>开始记录</string></property>
+   </widget>
+   <widget class="QPushButton" name="pushButton_StopRecord">
+    <property name="geometry"><rect><x>135</x><y>30</y><width>95</width><height>30</height></rect></property>
+    <property name="text"><string>停止记录</string></property>
+   </widget>
+  </widget>
+
+  <widget class="QGroupBox" name="Motor_StateB">
+   <property name="geometry"><rect><x>20</x><y>480</y><width>250</width><height>160</height></rect></property>
+   <property name="title"><string>力反馈</string></property>
+   <widget class="QLabel" name="label_ForceVel">
+    <property name="geometry"><rect><x>18</x><y>30</y><width>90</width><height>24</height></rect></property>
+    <property name="text"><string>速度(p/s)</string></property>
+   </widget>
+   <widget class="QLineEdit" name="lineEdit_ForceVel">
+    <property name="geometry"><rect><x>115</x><y>30</y><width>115</width><height>26</height></rect></property>
+    <property name="text"><string>0</string></property>
+    <property name="placeholderText"><string>回车更新速度</string></property>
+   </widget>
+   <widget class="QPushButton" name="pushButton_StartForce">
+    <property name="geometry"><rect><x>20</x><y>70</y><width>95</width><height>30</height></rect></property>
+    <property name="text"><string>启动力反馈</string></property>
+   </widget>
+   <widget class="QPushButton" name="pushButton_StopForce">
+    <property name="geometry"><rect><x>135</x><y>70</y><width>95</width><height>30</height></rect></property>
+    <property name="text"><string>停止力反馈</string></property>
+   </widget>
+   <widget class="QPushButton" name="pushButton_DisableAxis">
+    <property name="geometry"><rect><x>20</x><y>112</y><width>210</width><height>32</height></rect></property>
+    <property name="font"><font><pointsize>12</pointsize></font></property>
+    <property name="text"><string>总失能</string></property>
+   </widget>
+  </widget>
+
+  <widget class="QGroupBox" name="groupBox_Mode">
+   <property name="geometry"><rect><x>290</x><y>95</y><width>610</width><height>125</height></rect></property>
+   <property name="title"><string>模式控制（作用于左侧选中的电机）</string></property>
+   <widget class="QLabel" name="label_PosMode">
+    <property name="geometry"><rect><x>18</x><y>30</y><width>95</width><height>24</height></rect></property>
+    <property name="text"><string>位置模式</string></property>
+   </widget>
+   <widget class="QLineEdit" name="lineEdit_PosTarget">
+    <property name="geometry"><rect><x>120</x><y>30</y><width>105</width><height>26</height></rect></property>
+    <property name="text"><string>0</string></property>
+    <property name="placeholderText"><string>目标位置 pulse</string></property>
+   </widget>
+   <widget class="QLineEdit" name="lineEdit_PosSpeed">
+    <property name="geometry"><rect><x>235</x><y>30</y><width>85</width><height>26</height></rect></property>
+    <property name="text"><string>100</string></property>
+    <property name="placeholderText"><string>速度 p/s</string></property>
+   </widget>
+   <widget class="QPushButton" name="pushButton_PosMove">
+    <property name="geometry"><rect><x>335</x><y>30</y><width>95</width><height>28</height></rect></property>
+    <property name="text"><string>执行位置</string></property>
+   </widget>
+
+   <widget class="QLabel" name="label_VelMode">
+    <property name="geometry"><rect><x>18</x><y>66</y><width>95</width><height>24</height></rect></property>
+    <property name="text"><string>速度模式</string></property>
+   </widget>
+   <widget class="QLineEdit" name="lineEdit_VelTarget">
+    <property name="geometry"><rect><x>120</x><y>66</y><width>105</width><height>26</height></rect></property>
+    <property name="text"><string>0</string></property>
+    <property name="placeholderText"><string>目标速度 p/s</string></property>
+   </widget>
+   <widget class="QPushButton" name="pushButton_VelMove">
+    <property name="geometry"><rect><x>235</x><y>66</y><width>95</width><height>28</height></rect></property>
+    <property name="text"><string>执行速度</string></property>
+   </widget>
+
+   <widget class="QLabel" name="label_TorqueMode">
+    <property name="geometry"><rect><x>345</x><y>66</y><width>80</width><height>24</height></rect></property>
+    <property name="text"><string>力矩模式</string></property>
+   </widget>
+   <widget class="QLineEdit" name="lineEdit_TorqueTarget">
+    <property name="geometry"><rect><x>430</x><y>66</y><width>80</width><height>26</height></rect></property>
+    <property name="text"><string>0</string></property>
+    <property name="placeholderText"><string>0.1%</string></property>
+   </widget>
+   <widget class="QPushButton" name="pushButton_TorqueSet">
+    <property name="geometry"><rect><x>520</x><y>66</y><width>75</width><height>28</height></rect></property>
+    <property name="text"><string>执行力矩</string></property>
+   </widget>
+  </widget>
+
+  <widget class="QGroupBox" name="groupBox_Performance">
+   <property name="geometry"><rect><x>290</x><y>225</y><width>610</width><height>52</height></rect></property>
+   <property name="title"><string>循环执行时间监视（1秒内最大值）</string></property>
+   <widget class="QLabel" name="label_UiExecTitle">
+    <property name="geometry"><rect><x>18</x><y>22</y><width>110</width><height>20</height></rect></property>
+    <property name="text"><string>UI刷新:</string></property>
+   </widget>
+   <widget class="QLabel" name="label_UiExecValue">
+    <property name="geometry"><rect><x>90</x><y>22</y><width>90</width><height>20</height></rect></property>
+    <property name="text"><string>0 us</string></property>
+   </widget>
+   <widget class="QLabel" name="label_SampleExecTitle">
+    <property name="geometry"><rect><x>220</x><y>22</y><width>110</width><height>20</height></rect></property>
+    <property name="text"><string>采样线程:</string></property>
+   </widget>
+   <widget class="QLabel" name="label_SampleExecValue">
+    <property name="geometry"><rect><x>300</x><y>22</y><width>90</width><height>20</height></rect></property>
+    <property name="text"><string>0 us</string></property>
+   </widget>
+   <widget class="QLabel" name="label_ForceExecTitle">
+    <property name="geometry"><rect><x>425</x><y>22</y><width>120</width><height>20</height></rect></property>
+    <property name="text"><string>力反馈线程:</string></property>
+   </widget>
+   <widget class="QLabel" name="label_ForceExecValue">
+    <property name="geometry"><rect><x>515</x><y>22</y><width>90</width><height>20</height></rect></property>
+    <property name="text"><string>0 us</string></property>
+   </widget>
+  </widget>
+
+  <widget class="QGraphicsView" name="graphicsView_wave">
+   <property name="geometry"><rect><x>290</x><y>285</y><width>610</width><height>355</height></rect></property>
+  </widget>
+ </widget>
+ <layoutdefault spacing="6" margin="11"/>
+ <resources>
+  <include location="QtMotorConsole.qrc"/>
+ </resources>
+ <connections/>
+</ui>

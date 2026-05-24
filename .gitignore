@@ -1,0 +1,30 @@
+# Visual Studio / Qt build output
+.vs/
+x64/
+QtMotorConsole/x64/
+Debug/
+Release/
+*.obj
+*.pdb
+*.ilk
+*.idb
+*.ipch
+*.tlog
+*.log
+*.lastbuildstate
+
+# User-local IDE settings
+*.vcxproj.user
+*.suo
+*.user
+
+# Runtime output and captured data
+Data_*.txt
+
+# Temporary PDF extraction files generated during analysis
+_pdf_*
+
+# Qt generated files
+moc_*.cpp
+ui_*.h
+qrc_*.cpp
