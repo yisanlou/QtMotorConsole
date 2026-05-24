@@ -13,7 +13,13 @@ void RecordDataSample(long long timeIndex,
     long torque1,
     long pos2,
     long vel2,
-    long torque2);
+    long torque2,
+    long pos3,
+    long vel3,
+    long torque3,
+    long pos4,
+    long vel4,
+    long torque4);
 
 
 

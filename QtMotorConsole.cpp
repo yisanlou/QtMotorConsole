@@ -209,8 +209,8 @@ void QtMotorConsole::setupConnections()
     });
 
     connect(ui.pushButton_DisableAxis, &QPushButton::clicked, this, []() {
-        DisableAxis(1);
-        DisableAxis(2);
+        for (int axis = 1; axis <= 4; axis++)
+            DisableAxis(axis);
     });
 
     connect(ui.pushButton_DisableMotor1, &QPushButton::clicked, this, []() {
@@ -219,6 +219,14 @@ void QtMotorConsole::setupConnections()
 
     connect(ui.pushButton_DisableMotor2, &QPushButton::clicked, this, []() {
         DisableAxis(2);
+    });
+
+    connect(ui.pushButton_DisableMotor3, &QPushButton::clicked, this, []() {
+        DisableAxis(3);
+    });
+
+    connect(ui.pushButton_DisableMotor4, &QPushButton::clicked, this, []() {
+        DisableAxis(4);
     });
 
     connect(ui.pushButton_StartRecord, &QPushButton::clicked, this, []() {
@@ -255,7 +263,13 @@ void QtMotorConsole::resetWaveBuffers()
 
 int QtMotorConsole::selectedAxis() const
 {
-    return ui.radioButton_Motor2->isChecked() ? 2 : 1;
+    if (ui.radioButton_Motor4->isChecked())
+        return 4;
+    if (ui.radioButton_Motor3->isChecked())
+        return 3;
+    if (ui.radioButton_Motor2->isChecked())
+        return 2;
+    return 1;
 }
 
 void QtMotorConsole::updateWave()
@@ -295,9 +309,27 @@ void QtMotorConsole::updateWave()
 
     m_lastRenderedSampleIndex = sample.sampleIndex;
 
-    long pos = axis == 2 ? sample.pos2 : sample.pos1;
-    long vel = axis == 2 ? sample.vel2 : sample.vel1;
-    long torque = axis == 2 ? sample.torque2 : sample.torque1;
+    long pos = sample.pos1;
+    long vel = sample.vel1;
+    long torque = sample.torque1;
+    if (axis == 2)
+    {
+        pos = sample.pos2;
+        vel = sample.vel2;
+        torque = sample.torque2;
+    }
+    else if (axis == 3)
+    {
+        pos = sample.pos3;
+        vel = sample.vel3;
+        torque = sample.torque3;
+    }
+    else if (axis == 4)
+    {
+        pos = sample.pos4;
+        vel = sample.vel4;
+        torque = sample.torque4;
+    }
 
     RecordDataSample(sample.sampleIndex,
         sample.pos1,
@@ -305,7 +337,13 @@ void QtMotorConsole::updateWave()
         sample.torque1,
         sample.pos2,
         sample.vel2,
-        sample.torque2);
+        sample.torque2,
+        sample.pos3,
+        sample.vel3,
+        sample.torque3,
+        sample.pos4,
+        sample.vel4,
+        sample.torque4);
 
     m_timeIndex++;
     appendWavePoint(&m_posPoints, quantizeDisplayValue(pos * 0.001, kPositionDisplayStep));
@@ -636,10 +674,16 @@ void QtMotorConsole::sampleLoop()
         MotorSample motorSample = ReadFastSample();
         sample.pos1 = motorSample.pos1;
         sample.pos2 = motorSample.pos2;
+        sample.pos3 = motorSample.pos3;
+        sample.pos4 = motorSample.pos4;
         sample.vel1 = motorSample.vel1;
         sample.vel2 = motorSample.vel2;
+        sample.vel3 = motorSample.vel3;
+        sample.vel4 = motorSample.vel4;
         sample.torque1 = motorSample.torque1;
         sample.torque2 = motorSample.torque2;
+        sample.torque3 = motorSample.torque3;
+        sample.torque4 = motorSample.torque4;
         sample.valid = true;
 
         {

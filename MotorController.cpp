@@ -27,8 +27,9 @@ enum AxisWorkMode
     AxisModeTorque
 };
 
-static AxisWorkMode g_axisMode[3] = { AxisModeUnknown, AxisModeUnknown, AxisModeUnknown };
-static const int kAxisCount = 2;
+static const int kMaxAxisCount = 4;
+static AxisWorkMode g_axisMode[kMaxAxisCount + 1] = {};
+static std::atomic_int g_activeAxisCount(0);
 static const unsigned short kModeCsp = 0x08;
 static const unsigned short kModeCsv = 0x09;
 static const unsigned short kModeCst = 0x0A;
@@ -42,7 +43,11 @@ static std::atomic_bool g_cardClosing(false);
 
 static bool IsValidAxis(int axis)
 {
-    return axis >= 1 && axis <= kAxisCount;
+    int activeAxisCount = g_activeAxisCount.load();
+    if (activeAxisCount <= 0)
+        activeAxisCount = kMaxAxisCount;
+
+    return axis >= 1 && axis <= activeAxisCount;
 }
 
 static bool CanAccessEtherCAT()
@@ -365,7 +370,11 @@ static void DisableAxisDirect(int axis)
 
 static void DisableAllAxesForClose()
 {
-    for (int axis = 1; axis <= kAxisCount; axis++)
+    int activeAxisCount = g_activeAxisCount.load();
+    if (activeAxisCount <= 0)
+        activeAxisCount = kMaxAxisCount;
+
+    for (int axis = 1; axis <= activeAxisCount; axis++)
         DisableAxisDirect(axis);
 }
 
@@ -417,21 +426,21 @@ static bool PrepareTorqueModeCommandSource(int axis, const QString& modeName)
     int writeRet = g_MultiCard.MC_ECatSetSdoValue(axis, kIndexTorqueCommandSource, 0x00, kTorqueCommandSourceBus6080, 2);
     if (writeRet != 0)
     {
-        logMessage(QStringLiteral("%1：PA25(0x2019)当前值=%2，设置为总线力矩来源3失败，返回值=%3；请在驱动器参数中确认PA25=3")
+        logMessage(QStringLiteral("%1：PA25(0x2019)当前值=%2，设置为总线力矩来源3失败，返回值=%3；将继续尝试使能，请在驱动器参数中确认PA25=3")
             .arg(modeName)
             .arg(source)
             .arg(writeRet));
-        return ret == 0 && source == kTorqueCommandSourceBus6080;
+        return true;
     }
 
     Sleep(20);
     long verifySource = ReadSdoLong(axis, kIndexTorqueCommandSource, 0x00, &ret);
     if (ret == 0 && verifySource != kTorqueCommandSourceBus6080)
     {
-        logMessage(QStringLiteral("%1：PA25(0x2019)写入后读回=%2，期望=3；请保存参数并重启驱动器后再试")
+        logMessage(QStringLiteral("%1：PA25(0x2019)写入后读回=%2，期望=3；将继续尝试使能，如力矩不响应请在驱动器面板保存PA25=3并重启")
             .arg(modeName)
             .arg(verifySource));
-        return false;
+        return true;
     }
 
     return true;
@@ -503,12 +512,32 @@ long ReadTorque(int axis)
 MotorSample ReadFastSample()
 {
     MotorSample sample;
-    sample.pos1 = ReadPosition(1);
-    sample.vel1 = ReadVelocity(1);
-    sample.torque1 = ReadTorque(1);
-    sample.pos2 = ReadPosition(2);
-    sample.vel2 = ReadVelocity(2);
-    sample.torque2 = ReadTorque(2);
+    int activeAxisCount = g_activeAxisCount.load();
+
+    if (activeAxisCount >= 1)
+    {
+        sample.pos1 = ReadPosition(1);
+        sample.vel1 = ReadVelocity(1);
+        sample.torque1 = ReadTorque(1);
+    }
+    if (activeAxisCount >= 2)
+    {
+        sample.pos2 = ReadPosition(2);
+        sample.vel2 = ReadVelocity(2);
+        sample.torque2 = ReadTorque(2);
+    }
+    if (activeAxisCount >= 3)
+    {
+        sample.pos3 = ReadPosition(3);
+        sample.vel3 = ReadVelocity(3);
+        sample.torque3 = ReadTorque(3);
+    }
+    if (activeAxisCount >= 4)
+    {
+        sample.pos4 = ReadPosition(4);
+        sample.vel4 = ReadVelocity(4);
+        sample.torque4 = ReadTorque(4);
+    }
     return sample;
 }
 
@@ -541,21 +570,6 @@ void OpenCard()
     logMessage(QStringLiteral("Open card success."));
 
     g_MultiCard.MC_SetCommuTimer(3);
-    for (int axis = 1; axis <= kAxisCount; axis++)
-    {
-        int loadRet = g_MultiCard.MC_ECatLoadPDOConfig(axis);
-        if (loadRet != 0)
-            logMessage(QStringLiteral("轴%1：PDO加载失败，返回值=%2").arg(axis).arg(loadRet));
-        res += loadRet;
-    }
-
-    if (res != 0)
-    {
-        logMessage(QStringLiteral("PDO init failed，返回值=%1。").arg(res));
-        CloseCard();
-        return;
-    }
-
     Sleep(100);
     res = g_MultiCard.MC_ECatInit();
     Sleep(600);
@@ -568,9 +582,35 @@ void OpenCard()
 
     short slaveCount = 0;
     res = g_MultiCard.MC_ECatGetSlaveCount(&slaveCount);
-    if (res != 0 || slaveCount != kAxisCount)
+    if (res != 0 || slaveCount <= 0)
     {
-        logMessage(QStringLiteral("Servo count check failed."));
+        logMessage(QStringLiteral("Servo count check failed，返回值=%1，检测到数量=%2。").arg(res).arg(slaveCount));
+        CloseCard();
+        return;
+    }
+
+    int activeAxisCount = slaveCount > kMaxAxisCount ? kMaxAxisCount : slaveCount;
+    g_activeAxisCount = activeAxisCount;
+    if (slaveCount > kMaxAxisCount)
+    {
+        logMessage(QStringLiteral("检测到%1个从站，程序最多启用前%2个轴。").arg(slaveCount).arg(kMaxAxisCount));
+    }
+    else
+    {
+        logMessage(QStringLiteral("检测到%1个从站，启用%2个轴。").arg(slaveCount).arg(activeAxisCount));
+    }
+
+    for (int axis = 1; axis <= activeAxisCount; axis++)
+    {
+        int loadRet = g_MultiCard.MC_ECatLoadPDOConfig(axis);
+        if (loadRet != 0)
+            logMessage(QStringLiteral("轴%1：PDO加载失败，返回值=%2").arg(axis).arg(loadRet));
+        res += loadRet;
+    }
+
+    if (res != 0)
+    {
+        logMessage(QStringLiteral("PDO init failed，返回值=%1。").arg(res));
         CloseCard();
         return;
     }
@@ -598,8 +638,9 @@ void CloseCard()
     Sleep(100);
 
     g_cardOpened = false;
-    for (int axis = 1; axis <= kAxisCount; axis++)
+    for (int axis = 1; axis <= kMaxAxisCount; axis++)
         g_axisMode[axis] = AxisModeUnknown;
+    g_activeAxisCount = 0;
 
     g_MultiCard.MC_Close();
     Sleep(200);
@@ -886,7 +927,14 @@ bool ConfigServo()
 {
     int res = 0;
 
-    for (int axis = 1; axis <= kAxisCount; axis++)
+    int activeAxisCount = g_activeAxisCount.load();
+    if (activeAxisCount <= 0)
+    {
+        logMessage(QStringLiteral("Servo config failed：没有可用轴。"));
+        return false;
+    }
+
+    for (int axis = 1; axis <= activeAxisCount; axis++)
     {
         long supportedModes = 0;
         long displayMode = 0;
