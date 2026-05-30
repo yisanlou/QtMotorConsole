@@ -10,6 +10,7 @@
 #include <QGraphicsPathItem>
 #include <QGraphicsSimpleTextItem>
 #include <QBrush>
+#include <QColor>
 #include <QFont>
 #include <QTimer>
 #include <QIntValidator>
@@ -37,6 +38,7 @@ const double kTorqueDisplayScale = 1.0;
 const double kPositionDisplayStep = 1.0; // kpulse
 const double kVelocityDisplayStep = 1.0; // pulse/s
 const double kTorqueDisplayStep = 1.0;   // 0.1%
+const double kGratingDisplayStep = 1.0;  // kpulse
 const double kFilterLastWeight = 0.8;
 const double kFilterCurrentWeight = 0.2;
 const double kVelocityFilterLastWeight = 0.85;
@@ -96,10 +98,12 @@ QtMotorConsole::QtMotorConsole(QWidget* parent)
     m_posCurve(nullptr),
     m_velCurve(nullptr),
     m_torqueCurve(nullptr),
+    m_gratingCurve(nullptr),
     m_timer(nullptr),
     m_perfTimer(nullptr),
     m_timeIndex(0),
     m_selectedAxis(1),
+    m_selectedGrating(1),
     m_lastRenderedSampleIndex(-1),
     m_uiExecMaxUs(0),
     m_filterValid(false),
@@ -131,6 +135,7 @@ void QtMotorConsole::setupUiState()
     ui.lineEdit_TorqueTarget->setValidator(new QIntValidator(-1000, 1000, this));
     ui.checkBox_Vel->setText(QStringLiteral("速度(pulse/s)"));
     ui.checkBox_Torque->setText(QStringLiteral("力矩(0.1%)"));
+    ui.checkBox_Grating->setText(QStringLiteral("光栅尺(kpulse)"));
 }
 
 void QtMotorConsole::setupPlotScene()
@@ -146,9 +151,11 @@ void QtMotorConsole::setupPlotScene()
     m_posCurve = m_scene->addPath(QPainterPath(), QPen(Qt::green, 2));
     m_velCurve = m_scene->addPath(QPainterPath(), QPen(Qt::blue, 2));
     m_torqueCurve = m_scene->addPath(QPainterPath(), QPen(Qt::red, 2));
+    m_gratingCurve = m_scene->addPath(QPainterPath(), QPen(QColor(180, 0, 180), 2));
     m_posCurve->setZValue(1);
     m_velCurve->setZValue(1);
     m_torqueCurve->setZValue(1);
+    m_gratingCurve->setZValue(1);
     m_scene->setSceneRect(0, 0, kSceneWidth, kSceneHeight);
     drawAxis(0.0, 1.0, 0.0, 1.0, false, QStringLiteral("M1 Pos (kpulse)"), QBrush(Qt::darkGreen));
 
@@ -188,10 +195,18 @@ void QtMotorConsole::setupConnections()
 
     connect(ui.checkBox_Torque, &QCheckBox::toggled, this, [this](bool checked) {
         if (checked)
+        {
             ui.checkBox_Pos->setChecked(false);
+            ui.checkBox_Grating->setChecked(false);
+        }
     });
 
     connect(ui.checkBox_Pos, &QCheckBox::toggled, this, [this](bool checked) {
+        if (checked)
+            ui.checkBox_Torque->setChecked(false);
+    });
+
+    connect(ui.checkBox_Grating, &QCheckBox::toggled, this, [this](bool checked) {
         if (checked)
             ui.checkBox_Torque->setChecked(false);
     });
@@ -245,9 +260,11 @@ void QtMotorConsole::resetWaveBuffers()
     m_posPoints.clear();
     m_velPoints.clear();
     m_torquePoints.clear();
+    m_gratingPoints.clear();
     m_posCurve->setPath(QPainterPath());
     m_velCurve->setPath(QPainterPath());
     m_torqueCurve->setPath(QPainterPath());
+    m_gratingCurve->setPath(QPainterPath());
     m_filterValid = false;
     m_filteredVel = 0.0;
     m_filteredTorque = 0.0;
@@ -301,6 +318,13 @@ void QtMotorConsole::updateWave()
         resetWaveBuffers();
     }
 
+    int grating = ui.radioButton_Grating2->isChecked() ? 2 : 1;
+    if (grating != m_selectedGrating)
+    {
+        m_selectedGrating = grating;
+        resetWaveBuffers();
+    }
+
     if (sample.sampleIndex == m_lastRenderedSampleIndex)
     {
         finalizeExecTime();
@@ -312,6 +336,7 @@ void QtMotorConsole::updateWave()
     long pos = sample.pos1;
     long vel = sample.vel1;
     long torque = sample.torque1;
+    long gratingPos = (m_selectedGrating == 2) ? sample.grating2 : sample.grating1;
     if (axis == 2)
     {
         pos = sample.pos2;
@@ -343,10 +368,13 @@ void QtMotorConsole::updateWave()
         sample.torque3,
         sample.pos4,
         sample.vel4,
-        sample.torque4);
+        sample.torque4,
+        sample.grating1,
+        sample.grating2);
 
     m_timeIndex++;
     appendWavePoint(&m_posPoints, quantizeDisplayValue(pos * 0.001, kPositionDisplayStep));
+    appendWavePoint(&m_gratingPoints, quantizeDisplayValue(gratingPos * 0.001, kGratingDisplayStep));
     double scaledVel = vel * kVelocityDisplayScale;
     double scaledTorque = torque * kTorqueDisplayScale;
     m_velAverageBuffer[m_velAverageIndex] = scaledVel;
@@ -379,16 +407,20 @@ void QtMotorConsole::updateWave()
     bool showPos = ui.checkBox_Pos->isChecked();
     bool showVel = ui.checkBox_Vel->isChecked();
     bool showTorque = ui.checkBox_Torque->isChecked();
+    bool showGrating = ui.checkBox_Grating->isChecked();
 
-    if (showPos && showTorque)
+    if (showTorque && (showPos || showGrating))
     {
         showPos = false;
+        showGrating = false;
         ui.checkBox_Pos->setChecked(false);
+        ui.checkBox_Grating->setChecked(false);
     }
 
     m_posCurve->setVisible(showPos);
     m_velCurve->setVisible(showVel);
     m_torqueCurve->setVisible(showTorque);
+    m_gratingCurve->setVisible(showGrating);
 
     double leftMin = 0.0;
     double leftMax = 0.0;
@@ -402,9 +434,23 @@ void QtMotorConsole::updateWave()
         leftBrush = QBrush(Qt::red);
         updateValueRange(&m_torquePoints, &leftMin, &leftMax, &hasLeftValue);
     }
-    else if (showPos)
+    else
     {
-        updateValueRange(&m_posPoints, &leftMin, &leftMax, &hasLeftValue);
+        if (showGrating && !showPos)
+        {
+            leftTitle = QString("Grating%1 Pos (kpulse)").arg(m_selectedGrating);
+            leftBrush = QBrush(QColor(180, 0, 180));
+        }
+        else if (showPos && showGrating)
+        {
+            leftTitle = QString("M%1 / Grating%2 Pos (kpulse)").arg(m_selectedAxis).arg(m_selectedGrating);
+            leftBrush = QBrush(Qt::darkGreen);
+        }
+
+        if (showPos)
+            updateValueRange(&m_posPoints, &leftMin, &leftMax, &hasLeftValue);
+        if (showGrating)
+            updateValueRange(&m_gratingPoints, &leftMin, &leftMax, &hasLeftValue);
     }
 
     if (!hasLeftValue)
@@ -415,7 +461,7 @@ void QtMotorConsole::updateWave()
     addRangePadding(&leftMin, &leftMax);
     if (showTorque)
         roundDisplayRange(&leftMin, &leftMax, kTorqueDisplayStep);
-    else if (showPos)
+    else if (showPos || showGrating)
         roundDisplayRange(&leftMin, &leftMax, kPositionDisplayStep);
 
     double rightMin = 0.0;
@@ -436,6 +482,7 @@ void QtMotorConsole::updateWave()
     drawWaveCurve(m_posCurve, &m_posPoints, leftMin, leftMax);
     drawWaveCurve(m_velCurve, &m_velPoints, rightMin, rightMax);
     drawWaveCurve(m_torqueCurve, &m_torquePoints, leftMin, leftMax);
+    drawWaveCurve(m_gratingCurve, &m_gratingPoints, leftMin, leftMax);
 
     m_scene->setSceneRect(0, 0, kSceneWidth, kSceneHeight);
     finalizeExecTime();
@@ -661,7 +708,7 @@ void QtMotorConsole::sampleLoop()
     while (m_sampleRunning)
     {
         auto execStart = std::chrono::steady_clock::now();
-        nextTime += std::chrono::milliseconds(10);
+        nextTime += std::chrono::milliseconds(3);
 
         if (!IsCardOpened())
         {
@@ -684,6 +731,8 @@ void QtMotorConsole::sampleLoop()
         sample.torque2 = motorSample.torque2;
         sample.torque3 = motorSample.torque3;
         sample.torque4 = motorSample.torque4;
+        sample.grating1 = motorSample.grating1;
+        sample.grating2 = motorSample.grating2;
         sample.valid = true;
 
         {

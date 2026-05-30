@@ -28,6 +28,8 @@ struct MotorSample
     long torque2 = 0;
     long torque3 = 0;
     long torque4 = 0;
+    long grating1 = 0;
+    long grating2 = 0;
 };
 
 // 函数声明

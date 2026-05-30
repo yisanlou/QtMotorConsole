@@ -3,6 +3,7 @@
 #include <QDateTime>
 #include <cstdint>
 #include <chrono>
+#include <cmath>
 #include <thread>
 
 #pragma execution_character_set("utf-8")
@@ -40,6 +41,36 @@ static const unsigned short kControlSwitchOn = 0x0007;
 static const unsigned short kControlEnableOperation = 0x000F;
 static const unsigned short kControlFaultReset = 0x0080;
 static std::atomic_bool g_cardClosing(false);
+static long g_sampleTorqueCache[kMaxAxisCount] = {};
+static int g_nextSampleTorqueAxis = 1;
+static bool g_grating1ReadErrorLogged = false;
+static bool g_grating2ReadErrorLogged = false;
+static const int kMaxGratingEncoderIndex = 8;
+static int g_grating2EncoderIndex = 2;
+static int g_nextGrating2ProbeIndex = 2;
+static long g_grating2LastValue = 0;
+static int g_grating2UnchangedCount = 0;
+static long g_gratingProbeLastValue[kMaxGratingEncoderIndex + 1] = {};
+static bool g_gratingProbeHasValue[kMaxGratingEncoderIndex + 1] = {};
+
+static void ResetFastSampleCache()
+{
+    for (int i = 0; i < kMaxAxisCount; i++)
+        g_sampleTorqueCache[i] = 0;
+
+    g_nextSampleTorqueAxis = 1;
+    g_grating1ReadErrorLogged = false;
+    g_grating2ReadErrorLogged = false;
+    g_grating2EncoderIndex = 2;
+    g_nextGrating2ProbeIndex = 2;
+    g_grating2LastValue = 0;
+    g_grating2UnchangedCount = 0;
+    for (int i = 0; i <= kMaxGratingEncoderIndex; i++)
+    {
+        g_gratingProbeLastValue[i] = 0;
+        g_gratingProbeHasValue[i] = false;
+    }
+}
 
 static bool IsValidAxis(int axis)
 {
@@ -96,6 +127,11 @@ static long ClampInt16(long value)
     if (value < -32768)
         return -32768;
     return value;
+}
+
+static long RoundToLong(double value)
+{
+    return (long)std::llround(value);
 }
 
 static short ReadStatusWord(int axis, int* ret = nullptr)
@@ -192,6 +228,56 @@ static int WriteControlWord(int axis, unsigned short value, const QString& stepN
     return ret;
 }
 
+static void LogEnableDiagnostics(int axis, const QString& modeName, const QString& reason)
+{
+    int ret = 0;
+    short statusWord = ReadStatusWord(axis, &ret);
+    int statusRet = ret;
+    long controlWord = ReadSdoLong(axis, 0x6040, 0x00, &ret);
+    int controlRet = ret;
+    long modeCommand = ReadSdoLong(axis, 0x6060, 0x00, &ret);
+    int modeCommandRet = ret;
+    long modeDisplay = ReadSdoLong(axis, 0x6061, 0x00, &ret);
+    int modeDisplayRet = ret;
+    long errorCode = ReadSdoLong(axis, 0x603F, 0x00, &ret);
+    int errorRet = ret;
+    long supportedModes = ReadSdoLong(axis, 0x6502, 0x00, &ret);
+    int supportedRet = ret;
+    long torqueSource = ReadSdoLong(axis, kIndexTorqueCommandSource, 0x00, &ret);
+    int torqueSourceRet = ret;
+    long targetTorque = ReadSdoLong(axis, 0x6071, 0x00, &ret);
+    int targetTorqueRet = ret;
+    long maxTorque = ReadSdoLong(axis, 0x6072, 0x00, &ret);
+    int maxTorqueRet = ret;
+    long cardStatus = 0;
+    int cardRet = g_MultiCard.MC_GetSts(axis, &cardStatus);
+
+    logMessage(QStringLiteral("%1：轴%2使能诊断(%3)：状态字=0x%4(ret=%5)，控制字=0x%6(ret=%7)，6060=0x%8(ret=%9)，6061=0x%10(ret=%11)，603F=0x%12(ret=%13)，6502=0x%14(ret=%15)，PA25=0x%16(ret=%17)，6071=%18(ret=%19)，6072=%20(ret=%21)，板卡状态=0x%22(ret=%23)")
+        .arg(modeName)
+        .arg(axis)
+        .arg(reason)
+        .arg((unsigned short)statusWord, 4, 16, QChar('0'))
+        .arg(statusRet)
+        .arg((unsigned short)controlWord, 4, 16, QChar('0'))
+        .arg(controlRet)
+        .arg((unsigned long)modeCommand, 2, 16, QChar('0'))
+        .arg(modeCommandRet)
+        .arg((unsigned long)modeDisplay, 2, 16, QChar('0'))
+        .arg(modeDisplayRet)
+        .arg((unsigned long)errorCode, 4, 16, QChar('0'))
+        .arg(errorRet)
+        .arg((unsigned long)supportedModes, 8, 16, QChar('0'))
+        .arg(supportedRet)
+        .arg((unsigned long)torqueSource, 4, 16, QChar('0'))
+        .arg(torqueSourceRet)
+        .arg((long)(int16_t)targetTorque)
+        .arg(targetTorqueRet)
+        .arg(maxTorque)
+        .arg(maxTorqueRet)
+        .arg((unsigned long)cardStatus, 8, 16, QChar('0'))
+        .arg(cardRet));
+}
+
 static bool EnableAxisCiA402(int axis, const QString& modeName)
 {
     short statusWord = ReadStatusWord(axis);
@@ -236,11 +322,24 @@ static bool EnableAxisCiA402(int axis, const QString& modeName)
         Sleep(30);
     }
 
+    if (!IsOperationEnabled(ReadStatusWord(axis)))
+    {
+        LogEnableDiagnostics(axis, modeName, QStringLiteral("第一次Enable operation后"));
+
+        for (int retry = 0; retry < 10 && !IsOperationEnabled(ReadStatusWord(axis)); retry++)
+        {
+            g_MultiCard.MC_ECatSetSdoValue(axis, 0x6040, 0x00, kControlEnableOperation, 2);
+            g_MultiCard.MC_Update(1 << (axis - 1));
+            Sleep(50);
+        }
+    }
+
     if (!WaitStatus(axis, IsOperationEnabled, 300))
     {
         statusWord = ReadStatusWord(axis);
         long cardStatus = 0;
         g_MultiCard.MC_GetSts(axis, &cardStatus);
+        LogEnableDiagnostics(axis, modeName, QStringLiteral("最终超时"));
         logMessage(QStringLiteral("%1：使能超时，状态字=0x%2，板卡状态=0x%3")
             .arg(modeName)
             .arg((unsigned short)statusWord, 4, 16, QChar('0'))
@@ -495,11 +594,19 @@ static int SetTargetTorque(int axis, long torque, const QString& modeName, const
 
 long ReadPosition(int axis)
 {
+    double pos = 0.0;
+    if (g_MultiCard.MC_GetAxisEncPos(axis, &pos) == 0)
+        return RoundToLong(pos);
+
     return ReadSdoLong(axis, 0x6064, 0x00);
 }
 
 long ReadVelocity(int axis)
 {
+    double velPulsePerMs = 0.0;
+    if (g_MultiCard.MC_GetAxisEncVel(axis, &velPulsePerMs) == 0)
+        return RoundToLong(velPulsePerMs * 1000.0);
+
     return ReadSdoLong(axis, 0x606C, 0x00);
 }
 
@@ -509,34 +616,171 @@ long ReadTorque(int axis)
     return (int16_t)torque;
 }
 
+static bool ReadGratingEncoder(int encoderIndex, long* value, int* ret = nullptr)
+{
+    double rawValue = 0.0;
+    int localRet = g_MultiCard.MC_GetEncPos((short)encoderIndex, &rawValue, 1);
+    if (ret)
+        *ret = localRet;
+    if (localRet != 0)
+        return false;
+
+    *value = RoundToLong(rawValue);
+    return true;
+}
+
+static void ProbeGrating2Encoder(long grating1Value)
+{
+    int probeIndex = g_nextGrating2ProbeIndex;
+    for (int i = 0; i < kMaxGratingEncoderIndex; i++)
+    {
+        if (probeIndex > kMaxGratingEncoderIndex)
+            probeIndex = 2;
+        if (probeIndex != 1 && probeIndex != g_grating2EncoderIndex)
+            break;
+        probeIndex++;
+    }
+
+    long probeValue = 0;
+    if (ReadGratingEncoder(probeIndex, &probeValue))
+    {
+        if (g_gratingProbeHasValue[probeIndex] &&
+            probeValue != g_gratingProbeLastValue[probeIndex] &&
+            probeValue != grating1Value)
+        {
+            g_grating2EncoderIndex = probeIndex;
+            g_grating2ReadErrorLogged = false;
+            g_grating2UnchangedCount = 0;
+            logMessage(QStringLiteral("光栅尺2：自动切换到编码器通道%1读取").arg(probeIndex));
+        }
+
+        g_gratingProbeLastValue[probeIndex] = probeValue;
+        g_gratingProbeHasValue[probeIndex] = true;
+    }
+
+    g_nextGrating2ProbeIndex = probeIndex + 1;
+    if (g_nextGrating2ProbeIndex > kMaxGratingEncoderIndex)
+        g_nextGrating2ProbeIndex = 2;
+}
+
 MotorSample ReadFastSample()
 {
     MotorSample sample;
     int activeAxisCount = g_activeAxisCount.load();
+    if (activeAxisCount <= 0)
+        return sample;
+    if (activeAxisCount > kMaxAxisCount)
+        activeAxisCount = kMaxAxisCount;
+
+    double encPos[kMaxAxisCount] = {};
+    double encVelPulsePerMs[kMaxAxisCount] = {};
+
+    if (g_MultiCard.MC_GetAxisEncPos(1, encPos, (short)activeAxisCount) == 0)
+    {
+        sample.pos1 = RoundToLong(encPos[0]);
+        sample.pos2 = RoundToLong(encPos[1]);
+        sample.pos3 = RoundToLong(encPos[2]);
+        sample.pos4 = RoundToLong(encPos[3]);
+    }
+    else
+    {
+        if (activeAxisCount >= 1)
+            sample.pos1 = ReadSdoLong(1, 0x6064, 0x00);
+        if (activeAxisCount >= 2)
+            sample.pos2 = ReadSdoLong(2, 0x6064, 0x00);
+        if (activeAxisCount >= 3)
+            sample.pos3 = ReadSdoLong(3, 0x6064, 0x00);
+        if (activeAxisCount >= 4)
+            sample.pos4 = ReadSdoLong(4, 0x6064, 0x00);
+    }
+
+    if (g_MultiCard.MC_GetAxisEncVel(1, encVelPulsePerMs, (short)activeAxisCount) == 0)
+    {
+        sample.vel1 = RoundToLong(encVelPulsePerMs[0] * 1000.0);
+        sample.vel2 = RoundToLong(encVelPulsePerMs[1] * 1000.0);
+        sample.vel3 = RoundToLong(encVelPulsePerMs[2] * 1000.0);
+        sample.vel4 = RoundToLong(encVelPulsePerMs[3] * 1000.0);
+    }
+    else
+    {
+        if (activeAxisCount >= 1)
+            sample.vel1 = ReadSdoLong(1, 0x606C, 0x00);
+        if (activeAxisCount >= 2)
+            sample.vel2 = ReadSdoLong(2, 0x606C, 0x00);
+        if (activeAxisCount >= 3)
+            sample.vel3 = ReadSdoLong(3, 0x606C, 0x00);
+        if (activeAxisCount >= 4)
+            sample.vel4 = ReadSdoLong(4, 0x606C, 0x00);
+    }
+
+    if (g_nextSampleTorqueAxis > activeAxisCount)
+        g_nextSampleTorqueAxis = 1;
+
+    int torqueRet = 0;
+    long torque = ReadSdoLong(g_nextSampleTorqueAxis, 0x6077, 0x00, &torqueRet);
+    if (torqueRet == 0)
+        g_sampleTorqueCache[g_nextSampleTorqueAxis - 1] = (int16_t)torque;
+
+    g_nextSampleTorqueAxis++;
+    if (g_nextSampleTorqueAxis > activeAxisCount)
+        g_nextSampleTorqueAxis = 1;
+
+    long gratingValue = 0;
+    int gratingRet = 0;
+    if (ReadGratingEncoder(1, &gratingValue, &gratingRet))
+    {
+        sample.grating1 = gratingValue;
+    }
+    else if (!g_grating1ReadErrorLogged)
+    {
+        g_grating1ReadErrorLogged = true;
+        logMessage(QStringLiteral("光栅尺1：MC_GetEncPos(1)读取失败，返回值=%1").arg(gratingRet));
+    }
+
+    if (ReadGratingEncoder(g_grating2EncoderIndex, &gratingValue, &gratingRet))
+    {
+        sample.grating2 = gratingValue;
+        if (sample.grating2 == g_grating2LastValue)
+            g_grating2UnchangedCount++;
+        else
+        {
+            g_grating2LastValue = sample.grating2;
+            g_grating2UnchangedCount = 0;
+        }
+    }
+    else if (!g_grating2ReadErrorLogged)
+    {
+        g_grating2ReadErrorLogged = true;
+        sample.grating2 = g_grating2LastValue;
+        g_grating2UnchangedCount++;
+        logMessage(QStringLiteral("光栅尺2：MC_GetEncPos(%1)读取失败，返回值=%2")
+            .arg(g_grating2EncoderIndex)
+            .arg(gratingRet));
+    }
+    else
+    {
+        sample.grating2 = g_grating2LastValue;
+        g_grating2UnchangedCount++;
+    }
+
+    if (g_grating2UnchangedCount >= 40)
+        ProbeGrating2Encoder(sample.grating1);
 
     if (activeAxisCount >= 1)
     {
-        sample.pos1 = ReadPosition(1);
-        sample.vel1 = ReadVelocity(1);
-        sample.torque1 = ReadTorque(1);
+        sample.torque1 = g_sampleTorqueCache[0];
     }
     if (activeAxisCount >= 2)
     {
-        sample.pos2 = ReadPosition(2);
-        sample.vel2 = ReadVelocity(2);
-        sample.torque2 = ReadTorque(2);
+        sample.torque2 = g_sampleTorqueCache[1];
     }
     if (activeAxisCount >= 3)
     {
-        sample.pos3 = ReadPosition(3);
-        sample.vel3 = ReadVelocity(3);
-        sample.torque3 = ReadTorque(3);
+        sample.torque3 = g_sampleTorqueCache[2];
     }
     if (activeAxisCount >= 4)
     {
-        sample.pos4 = ReadPosition(4);
-        sample.vel4 = ReadVelocity(4);
-        sample.torque4 = ReadTorque(4);
+        sample.torque4 = g_sampleTorqueCache[3];
     }
     return sample;
 }
@@ -591,6 +835,8 @@ void OpenCard()
 
     int activeAxisCount = slaveCount > kMaxAxisCount ? kMaxAxisCount : slaveCount;
     g_activeAxisCount = activeAxisCount;
+    ResetFastSampleCache();
+
     if (slaveCount > kMaxAxisCount)
     {
         logMessage(QStringLiteral("检测到%1个从站，程序最多启用前%2个轴。").arg(slaveCount).arg(kMaxAxisCount));
@@ -641,6 +887,7 @@ void CloseCard()
     for (int axis = 1; axis <= kMaxAxisCount; axis++)
         g_axisMode[axis] = AxisModeUnknown;
     g_activeAxisCount = 0;
+    ResetFastSampleCache();
 
     g_MultiCard.MC_Close();
     Sleep(200);

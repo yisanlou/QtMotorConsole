@@ -35,7 +35,7 @@
   </widget>
 
   <widget class="QGroupBox" name="groupBox_Display">
-   <property name="geometry"><rect><x>20</x><y>95</y><width>250</width><height>140</height></rect></property>
+   <property name="geometry"><rect><x>20</x><y>95</y><width>250</width><height>170</height></rect></property>
    <property name="title"><string>曲线显示</string></property>
    <widget class="QCheckBox" name="checkBox_Pos">
     <property name="geometry"><rect><x>20</x><y>30</y><width>190</width><height>24</height></rect></property>
@@ -53,10 +53,24 @@
     <property name="text"><string>力矩(0.1%)</string></property>
     <property name="styleSheet"><string>color: red;</string></property>
    </widget>
+   <widget class="QCheckBox" name="checkBox_Grating">
+    <property name="geometry"><rect><x>20</x><y>132</y><width>120</width><height>24</height></rect></property>
+    <property name="text"><string>光栅尺(kpulse)</string></property>
+    <property name="styleSheet"><string>color: rgb(180, 0, 180);</string></property>
+   </widget>
+   <widget class="QRadioButton" name="radioButton_Grating1">
+    <property name="geometry"><rect><x>145</x><y>132</y><width>45</width><height>24</height></rect></property>
+    <property name="text"><string>1</string></property>
+    <property name="checked"><bool>true</bool></property>
+   </widget>
+   <widget class="QRadioButton" name="radioButton_Grating2">
+    <property name="geometry"><rect><x>195</x><y>132</y><width>45</width><height>24</height></rect></property>
+    <property name="text"><string>2</string></property>
+   </widget>
   </widget>
 
   <widget class="QGroupBox" name="groupBox_Axis">
-   <property name="geometry"><rect><x>20</x><y>245</y><width>250</width><height>150</height></rect></property>
+   <property name="geometry"><rect><x>20</x><y>275</y><width>250</width><height>150</height></rect></property>
    <property name="title"><string>电机选择</string></property>
    <widget class="QRadioButton" name="radioButton_Motor1">
     <property name="geometry"><rect><x>20</x><y>32</y><width>90</width><height>24</height></rect></property>
@@ -94,7 +108,7 @@
   </widget>
 
   <widget class="QGroupBox" name="groupBox_Record">
-   <property name="geometry"><rect><x>20</x><y>405</y><width>250</width><height>76</height></rect></property>
+   <property name="geometry"><rect><x>20</x><y>435</y><width>250</width><height>76</height></rect></property>
    <property name="title"><string>数据记录</string></property>
    <widget class="QPushButton" name="pushButton_StartRecord">
     <property name="geometry"><rect><x>20</x><y>30</y><width>95</width><height>30</height></rect></property>
@@ -107,7 +121,7 @@
   </widget>
 
   <widget class="QGroupBox" name="Motor_StateB">
-   <property name="geometry"><rect><x>20</x><y>495</y><width>250</width><height>160</height></rect></property>
+   <property name="geometry"><rect><x>20</x><y>520</y><width>250</width><height>135</height></rect></property>
    <property name="title"><string>力反馈</string></property>
    <widget class="QLabel" name="label_ForceVel">
     <property name="geometry"><rect><x>18</x><y>30</y><width>90</width><height>24</height></rect></property>
@@ -127,7 +141,7 @@
     <property name="text"><string>停止力反馈</string></property>
    </widget>
    <widget class="QPushButton" name="pushButton_DisableAxis">
-    <property name="geometry"><rect><x>20</x><y>112</y><width>210</width><height>32</height></rect></property>
+    <property name="geometry"><rect><x>20</x><y>104</y><width>210</width><height>26</height></rect></property>
     <property name="font"><font><pointsize>12</pointsize></font></property>
     <property name="text"><string>总失能</string></property>
    </widget>

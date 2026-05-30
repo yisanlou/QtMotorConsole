@@ -37,7 +37,8 @@ void StartRecord()
         << " motor1_pos motor1_vel motor1_torque"
         << " motor2_pos motor2_vel motor2_torque"
         << " motor3_pos motor3_vel motor3_torque"
-        << " motor4_pos motor4_vel motor4_torque\n";
+        << " motor4_pos motor4_vel motor4_torque"
+        << " grating1_pos grating2_pos\n";
     g_recording = true;
 
     logMessage(QStringLiteral("开始写入: ") + fileName);
@@ -81,7 +82,9 @@ void RecordDataSample(long long timeIndex,
     long torque3,
     long pos4,
     long vel4,
-    long torque4)
+    long torque4,
+    long grating1,
+    long grating2)
 {
     QMutexLocker locker(&g_recordMutex);
 
@@ -101,5 +104,7 @@ void RecordDataSample(long long timeIndex,
         << " " << pos4
         << " " << vel4
         << " " << torque4
+        << " " << grating1
+        << " " << grating2
         << "\n";
 }

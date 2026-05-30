@@ -41,6 +41,8 @@ private:
         long torque2 = 0;
         long torque3 = 0;
         long torque4 = 0;
+        long grating1 = 0;
+        long grating2 = 0;
         bool valid = false;
     };
 
@@ -51,6 +53,7 @@ private:
     QGraphicsPathItem* m_posCurve;
     QGraphicsPathItem* m_velCurve;
     QGraphicsPathItem* m_torqueCurve;
+    QGraphicsPathItem* m_gratingCurve;
     QTimer* m_timer;
     QTimer* m_perfTimer;
     QVector<QGraphicsSimpleTextItem*> m_axisLabels;
@@ -58,8 +61,10 @@ private:
     QVector<QPointF> m_posPoints;
     QVector<QPointF> m_velPoints;
     QVector<QPointF> m_torquePoints;
+    QVector<QPointF> m_gratingPoints;
     int m_timeIndex;
     int m_selectedAxis;
+    int m_selectedGrating;
     long long m_lastRenderedSampleIndex;
     long long m_uiExecMaxUs;
     bool m_filterValid;
