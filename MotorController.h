@@ -43,6 +43,7 @@ void PositionModeMove(int axis, long targetPos, long speed);
 void VelocityModeMove(int axis, long speed);
 void TorqueModeSet(int axis, long torque);
 void DisableAxis(int axis);
+void StartGratingZero(int grating);
 
 long ReadPosition(int axis);
 long ReadVelocity(int axis);

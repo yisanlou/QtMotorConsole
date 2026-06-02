@@ -223,6 +223,14 @@ void QtMotorConsole::setupConnections()
         TorqueModeSet(selectedAxis(), ui.lineEdit_TorqueTarget->text().toLong());
     });
 
+    connect(ui.pushButton_Grating1Zero, &QPushButton::clicked, this, []() {
+        StartGratingZero(1);
+    });
+
+    connect(ui.pushButton_Grating2Zero, &QPushButton::clicked, this, []() {
+        StartGratingZero(2);
+    });
+
     connect(ui.pushButton_DisableAxis, &QPushButton::clicked, this, []() {
         for (int axis = 1; axis <= 4; axis++)
             DisableAxis(axis);

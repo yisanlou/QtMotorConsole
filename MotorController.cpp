@@ -17,6 +17,8 @@ std::atomic_long g_forceFeedbackTargetVel(0);
 std::atomic_long g_forceFeedbackCurrentVel(0);
 std::atomic_llong g_forceFeedbackExecMaxUs(0);
 std::thread g_forceFeedbackThread;
+std::atomic_bool g_gratingZeroRunning(false);
+std::thread g_gratingZeroThread;
 
 QTextBrowser* g_logWidget = nullptr;  // 先初始化为 nullptr
 
@@ -52,6 +54,8 @@ static long g_grating2LastValue = 0;
 static int g_grating2UnchangedCount = 0;
 static long g_gratingProbeLastValue[kMaxGratingEncoderIndex + 1] = {};
 static bool g_gratingProbeHasValue[kMaxGratingEncoderIndex + 1] = {};
+static std::atomic_long g_gratingOffset1(0);
+static std::atomic_long g_gratingOffset2(0);
 
 static void ResetFastSampleCache()
 {
@@ -729,7 +733,7 @@ MotorSample ReadFastSample()
     int gratingRet = 0;
     if (ReadGratingEncoder(1, &gratingValue, &gratingRet))
     {
-        sample.grating1 = gratingValue;
+        sample.grating1 = gratingValue - g_gratingOffset1.load();
     }
     else if (!g_grating1ReadErrorLogged)
     {
@@ -739,19 +743,20 @@ MotorSample ReadFastSample()
 
     if (ReadGratingEncoder(g_grating2EncoderIndex, &gratingValue, &gratingRet))
     {
-        sample.grating2 = gratingValue;
-        if (sample.grating2 == g_grating2LastValue)
+        long grating2Raw = gratingValue;
+        sample.grating2 = grating2Raw - g_gratingOffset2.load();
+        if (grating2Raw == g_grating2LastValue)
             g_grating2UnchangedCount++;
         else
         {
-            g_grating2LastValue = sample.grating2;
+            g_grating2LastValue = grating2Raw;
             g_grating2UnchangedCount = 0;
         }
     }
     else if (!g_grating2ReadErrorLogged)
     {
         g_grating2ReadErrorLogged = true;
-        sample.grating2 = g_grating2LastValue;
+        sample.grating2 = g_grating2LastValue - g_gratingOffset2.load();
         g_grating2UnchangedCount++;
         logMessage(QStringLiteral("光栅尺2：MC_GetEncPos(%1)读取失败，返回值=%2")
             .arg(g_grating2EncoderIndex)
@@ -759,7 +764,7 @@ MotorSample ReadFastSample()
     }
     else
     {
-        sample.grating2 = g_grating2LastValue;
+        sample.grating2 = g_grating2LastValue - g_gratingOffset2.load();
         g_grating2UnchangedCount++;
     }
 
@@ -879,6 +884,12 @@ void CloseCard()
 
     if (g_bFollowRunning || g_forceFeedbackThread.joinable())
         StopForceFeedback();
+    if (g_gratingZeroRunning || g_gratingZeroThread.joinable())
+    {
+        g_gratingZeroRunning = false;
+        if (g_gratingZeroThread.joinable())
+            g_gratingZeroThread.join();
+    }
 
     DisableAllAxesForClose();
     Sleep(100);
@@ -938,6 +949,152 @@ void StopForceFeedback()
     }
 
     logMessage(QStringLiteral("Force feedback stopped."));
+}
+
+static bool PrepareGratingZeroAxis(int axis, const QString& modeName)
+{
+    int res = 0;
+    res = AddStepResult(res, modeName, QStringLiteral("Clear target torque 6071h"), SetTargetTorque(axis, 0, modeName, QStringLiteral("Clear target torque 6071h")));
+    res = AddStepResult(res, modeName, QStringLiteral("Update zero command"), g_MultiCard.MC_Update(1 << (axis - 1)));
+    if (res != 0)
+        return false;
+
+    if (!SwitchAxisMode(axis, kModeCst, modeName))
+        return false;
+    if (!PrepareTorqueModeCommandSource(axis, modeName))
+        return false;
+    if (!EnableAxisCiA402(axis, modeName))
+        return false;
+
+    g_axisMode[axis] = AxisModeTorque;
+    return true;
+}
+
+static long ReadGratingRawValue(int grating)
+{
+    long value = 0;
+    int encoderIndex = (grating == 2) ? g_grating2EncoderIndex : 1;
+    ReadGratingEncoder(encoderIndex, &value);
+    return value;
+}
+
+static void GratingZeroWorker(int grating)
+{
+    const int axis = (grating == 2) ? 4 : 2;
+    const long zeroTorque = (grating == 2) ? -100 : 100;
+    const int periodMs = 10;
+    const int stablePeriodCount = 10;
+    const long velocityStableThreshold = 5;
+    const long velocityStopThreshold = 20;
+    const QString modeName = QStringLiteral("光栅尺%1归零").arg(grating);
+    const QString zeroPointName = (grating == 2) ? QStringLiteral("最小值点") : QStringLiteral("最大值点");
+
+    if (!IsCardOpened())
+    {
+        logMessage(modeName + QStringLiteral("：控制卡未打开。"));
+        g_gratingZeroRunning = false;
+        return;
+    }
+
+    if (g_bFollowRunning || g_forceFeedbackThread.joinable())
+        StopForceFeedback();
+
+    if (!PrepareGratingZeroAxis(axis, modeName))
+    {
+        SetTargetTorque(axis, 0, modeName, QStringLiteral("Clear target torque 6071h"), false);
+        g_MultiCard.MC_Update(1 << (axis - 1));
+        g_gratingZeroRunning = false;
+        logMessage(modeName + QStringLiteral("：启动失败。"));
+        return;
+    }
+
+    if (SetTargetTorque(axis, zeroTorque, modeName, QStringLiteral("Set zero torque 6071h"), false) != 0 ||
+        g_MultiCard.MC_Update(1 << (axis - 1)) != 0)
+    {
+        SetTargetTorque(axis, 0, modeName, QStringLiteral("Clear target torque 6071h"), false);
+        g_MultiCard.MC_Update(1 << (axis - 1));
+        g_gratingZeroRunning = false;
+        logMessage(modeName + QStringLiteral("：力矩输出失败。"));
+        return;
+    }
+
+    logMessage(QStringLiteral("%1：开始，电机%2输出%3力矩，寻找%4。")
+        .arg(modeName)
+        .arg(axis)
+        .arg(zeroTorque)
+        .arg(zeroPointName));
+
+    int stableCount = 0;
+    bool zeroFound = false;
+    long lastVel = ReadVelocity(axis);
+    auto nextTime = std::chrono::steady_clock::now();
+
+    while (g_gratingZeroRunning)
+    {
+        nextTime += std::chrono::milliseconds(periodMs);
+        std::this_thread::sleep_until(nextTime);
+
+        long vel = ReadVelocity(axis);
+        long velDiff = vel - lastVel;
+        if (velDiff < 0)
+            velDiff = -velDiff;
+
+        if (velDiff <= velocityStableThreshold && vel <= velocityStopThreshold && vel >= -velocityStopThreshold)
+            stableCount++;
+        else
+            stableCount = 0;
+
+        lastVel = vel;
+
+        if (stableCount >= stablePeriodCount)
+        {
+            zeroFound = true;
+            break;
+        }
+    }
+
+    SetTargetTorque(axis, 0, modeName, QStringLiteral("Clear target torque 6071h"), false);
+    g_MultiCard.MC_Update(1 << (axis - 1));
+
+    if (!zeroFound)
+    {
+        g_gratingZeroRunning = false;
+        logMessage(modeName + QStringLiteral("：已停止，偏置未改变。"));
+        return;
+    }
+
+    long zeroPoint = ReadGratingRawValue(grating);
+    if (grating == 2)
+        g_gratingOffset2 = zeroPoint;
+    else
+        g_gratingOffset1 = zeroPoint;
+
+    g_gratingZeroRunning = false;
+    logMessage(QStringLiteral("%1：完成，%2原始值=%3，偏置已设置为%4，当前点显示为0。")
+        .arg(modeName)
+        .arg(zeroPointName)
+        .arg(zeroPoint)
+        .arg(zeroPoint));
+}
+
+void StartGratingZero(int grating)
+{
+    if (grating != 1 && grating != 2)
+        return;
+
+    if (g_gratingZeroRunning)
+    {
+        logMessage(QStringLiteral("光栅尺归零正在执行，请等待完成。"));
+        return;
+    }
+
+    if (g_gratingZeroThread.joinable())
+        g_gratingZeroThread.join();
+
+    g_gratingZeroRunning = true;
+    g_gratingZeroThread = std::thread([grating]() {
+        GratingZeroWorker(grating);
+        });
 }
 
 void ForceFeedback(long vel)
