@@ -69,6 +69,7 @@
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
       <ConformanceMode>true</ConformanceMode>
+      <AdditionalIncludeDirectories>include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
@@ -85,6 +86,7 @@
       <ConformanceMode>true</ConformanceMode>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
+      <AdditionalIncludeDirectories>include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
@@ -96,20 +98,32 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="SaveData.cpp" />
+    <ClCompile Include="src\AxisCiA402.cpp" />
+    <ClCompile Include="src\EtherCatAccess.cpp" />
+    <ClCompile Include="src\ForceFeedbackController.cpp" />
+    <ClCompile Include="src\GratingClosedLoopController.cpp" />
+    <ClCompile Include="src\GratingController.cpp" />
+    <ClCompile Include="src\MotorCardContext.cpp" />
+    <ClCompile Include="src\MotorController.cpp" />
+    <ClCompile Include="src\MotorLog.cpp" />
+    <ClCompile Include="src\MotorSampling.cpp" />
+    <ClCompile Include="src\MotionCommands.cpp" />
+    <ClCompile Include="src\SaveData.cpp" />
+    <ClCompile Include="src\ServoConfig.cpp" />
     <QtRcc Include="QtMotorConsole.qrc" />
     <QtUic Include="QtMotorConsole.ui" />
-    <QtMoc Include="QtMotorConsole.h" />
-    <ClCompile Include="Linear_Graph.cpp" />
-    <ClCompile Include="MotorController.cpp" />
-    <ClCompile Include="QtMotorConsole.cpp" />
-    <ClCompile Include="main.cpp" />
+    <QtMoc Include="include\QtMotorConsole.h" />
+    <ClCompile Include="src\Linear_Graph.cpp" />
+    <ClCompile Include="src\QtMotorConsole.cpp" />
+    <ClCompile Include="src\main.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Linear_Graph.h" />
-    <ClInclude Include="MotorController.h" />
-    <ClInclude Include="MultiCardCPP.h" />
-    <ClInclude Include="SaveData.h" />
+    <ClInclude Include="include\Linear_Graph.h" />
+    <ClInclude Include="include\MotorController.h" />
+    <ClInclude Include="include\MotorInternal.h" />
+    <ClInclude Include="include\MotorTypes.h" />
+    <ClInclude Include="include\MultiCardCPP.h" />
+    <ClInclude Include="include\SaveData.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Condition="Exists('$(QtMsBuild)\qt.targets')">

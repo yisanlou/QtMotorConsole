@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <Filter Include="Source Files">
@@ -29,39 +29,33 @@
     <QtUic Include="QtMotorConsole.ui">
       <Filter>Form Files</Filter>
     </QtUic>
-    <QtMoc Include="QtMotorConsole.h">
+    <QtMoc Include="include\QtMotorConsole.h">
       <Filter>Header Files</Filter>
     </QtMoc>
-    <ClCompile Include="QtMotorConsole.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="main.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="MotorController.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="Linear_Graph.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="SaveData.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
+    <ClCompile Include="src\AxisCiA402.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="src\EtherCatAccess.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="src\ForceFeedbackController.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="src\GratingClosedLoopController.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="src\GratingController.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="src\Linear_Graph.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="src\main.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="src\MotorCardContext.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="src\MotorController.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="src\MotorLog.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="src\MotorSampling.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="src\MotionCommands.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="src\QtMotorConsole.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="src\SaveData.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="src\ServoConfig.cpp"><Filter>Source Files</Filter></ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="MultiCardCPP.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="MotorController.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="Linear_Graph.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="SaveData.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
+    <ClInclude Include="include\Linear_Graph.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="include\MotorController.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="include\MotorInternal.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="include\MotorTypes.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="include\MultiCardCPP.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="include\SaveData.h"><Filter>Header Files</Filter></ClInclude>
   </ItemGroup>
 </Project>

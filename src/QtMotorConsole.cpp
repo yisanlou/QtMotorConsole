@@ -14,6 +14,7 @@
 #include <QFont>
 #include <QTimer>
 #include <QIntValidator>
+#include <QDoubleValidator>
 
 #include <windows.h>
 #include <cstdio>
@@ -128,7 +129,19 @@ QtMotorConsole::QtMotorConsole(QWidget* parent)
 
 void QtMotorConsole::setupUiState()
 {
-    ui.lineEdit_ForceVel->setValidator(new QIntValidator(-5000, 5000, this));
+    ui.lineEdit_ForceVel->setValidator(new QIntValidator(-1000000000, 1000000000, this));
+    ui.lineEdit_ForceTarget2->setValidator(new QIntValidator(-1000000000, 1000000000, this));
+    ui.lineEdit_ForceKp->setValidator(new QDoubleValidator(-1000000.0, 1000000.0, 6, this));
+    ui.lineEdit_ForceKi->setValidator(new QDoubleValidator(-1000000.0, 1000000.0, 6, this));
+    ui.lineEdit_ForceILimit->setValidator(new QDoubleValidator(0.0, 1000000.0, 6, this));
+    ui.lineEdit_ForceFriction->setValidator(new QDoubleValidator(-1000000.0, 1000000.0, 6, this));
+    ui.lineEdit_ForceTorqueLimit->setValidator(new QIntValidator(0, 1000, this));
+    ui.lineEdit_GratingLoopTarget1->setValidator(new QIntValidator(-1000000000, 1000000000, this));
+    ui.lineEdit_GratingLoopTarget2->setValidator(new QIntValidator(-1000000000, 1000000000, this));
+    ui.label_ForceVel->setText(QStringLiteral("光栅1目标"));
+    ui.lineEdit_ForceVel->setPlaceholderText(QStringLiteral("光栅1 pulse"));
+    ui.label_ForceTarget2->setVisible(false);
+    ui.lineEdit_ForceTarget2->setVisible(false);
     ui.lineEdit_PosTarget->setValidator(new QIntValidator(-1000000000, 1000000000, this));
     ui.lineEdit_PosSpeed->setValidator(new QIntValidator(0, 1000000, this));
     ui.lineEdit_VelTarget->setValidator(new QIntValidator(-1000000, 1000000, this));
@@ -136,6 +149,15 @@ void QtMotorConsole::setupUiState()
     ui.checkBox_Vel->setText(QStringLiteral("速度(pulse/s)"));
     ui.checkBox_Torque->setText(QStringLiteral("力矩(0.1%)"));
     ui.checkBox_Grating->setText(QStringLiteral("光栅尺(kpulse)"));
+}
+
+void QtMotorConsole::applyGratingClosedLoopConfig()
+{
+    SetGratingClosedLoopConfig(ui.lineEdit_ForceKp->text().toDouble(),
+        ui.lineEdit_ForceKi->text().toDouble(),
+        ui.lineEdit_ForceILimit->text().toDouble(),
+        ui.lineEdit_ForceFriction->text().toDouble(),
+        ui.lineEdit_ForceTorqueLimit->text().toLong());
 }
 
 void QtMotorConsole::setupPlotScene()
@@ -193,6 +215,36 @@ void QtMotorConsole::setupConnections()
         StartForceFeedback(ui.lineEdit_ForceVel->text().toLong());
     });
 
+    connect(ui.lineEdit_ForceTarget2, &QLineEdit::returnPressed, this, [this]() {
+        StartForceFeedback(ui.lineEdit_ForceVel->text().toLong());
+    });
+
+    auto updateGratingLoopConfig = [this]() {
+        applyGratingClosedLoopConfig();
+    };
+    connect(ui.lineEdit_ForceKp, &QLineEdit::returnPressed, this, updateGratingLoopConfig);
+    connect(ui.lineEdit_ForceKi, &QLineEdit::returnPressed, this, updateGratingLoopConfig);
+    connect(ui.lineEdit_ForceILimit, &QLineEdit::returnPressed, this, updateGratingLoopConfig);
+    connect(ui.lineEdit_ForceFriction, &QLineEdit::returnPressed, this, updateGratingLoopConfig);
+    connect(ui.lineEdit_ForceTorqueLimit, &QLineEdit::returnPressed, this, updateGratingLoopConfig);
+    connect(ui.pushButton_StartGratingLoop1, &QPushButton::clicked, this, [this]() {
+        applyGratingClosedLoopConfig();
+        StartGratingClosedLoop(1, ui.lineEdit_GratingLoopTarget1->text().toLong());
+    });
+    connect(ui.pushButton_StartGratingLoop2, &QPushButton::clicked, this, [this]() {
+        applyGratingClosedLoopConfig();
+        StartGratingClosedLoop(2, ui.lineEdit_GratingLoopTarget2->text().toLong());
+    });
+    connect(ui.pushButton_StopGratingLoop1, &QPushButton::clicked, this, []() {
+        StopGratingClosedLoop(1);
+    });
+    connect(ui.pushButton_StopGratingLoop2, &QPushButton::clicked, this, []() {
+        StopGratingClosedLoop(2);
+    });
+    connect(ui.pushButton_StopGratingLoopAll, &QPushButton::clicked, this, []() {
+        StopAllGratingClosedLoop();
+    });
+
     connect(ui.checkBox_Torque, &QCheckBox::toggled, this, [this](bool checked) {
         if (checked)
         {
@@ -232,6 +284,7 @@ void QtMotorConsole::setupConnections()
     });
 
     connect(ui.pushButton_DisableAxis, &QPushButton::clicked, this, []() {
+        StopAllGratingClosedLoop();
         for (int axis = 1; axis <= 4; axis++)
             DisableAxis(axis);
     });

@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>920</width>
+    <width>1120</width>
     <height>660</height>
    </rect>
   </property>
@@ -32,6 +32,87 @@
    <property name="geometry"><rect><x>790</x><y>20</y><width>110</width><height>58</height></rect></property>
    <property name="font"><font><pointsize>18</pointsize></font></property>
    <property name="text"><string>停止</string></property>
+  </widget>
+
+  <widget class="QGroupBox" name="groupBox_GratingLoop">
+   <property name="geometry"><rect><x>910</x><y>20</y><width>190</width><height>330</height></rect></property>
+   <property name="title"><string>光栅闭环调试</string></property>
+   <widget class="QLabel" name="label_ForceKp">
+    <property name="geometry"><rect><x>12</x><y>24</y><width>80</width><height>22</height></rect></property>
+    <property name="text"><string>Kp</string></property>
+   </widget>
+   <widget class="QLineEdit" name="lineEdit_ForceKp">
+    <property name="geometry"><rect><x>96</x><y>24</y><width>82</width><height>22</height></rect></property>
+    <property name="text"><string>0.2</string></property>
+   </widget>
+   <widget class="QLabel" name="label_ForceKi">
+    <property name="geometry"><rect><x>12</x><y>54</y><width>80</width><height>22</height></rect></property>
+    <property name="text"><string>Ki</string></property>
+   </widget>
+   <widget class="QLineEdit" name="lineEdit_ForceKi">
+    <property name="geometry"><rect><x>96</x><y>54</y><width>82</width><height>22</height></rect></property>
+    <property name="text"><string>0.02</string></property>
+   </widget>
+   <widget class="QLabel" name="label_ForceILimit">
+    <property name="geometry"><rect><x>12</x><y>84</y><width>80</width><height>22</height></rect></property>
+    <property name="text"><string>I限幅</string></property>
+   </widget>
+   <widget class="QLineEdit" name="lineEdit_ForceILimit">
+    <property name="geometry"><rect><x>96</x><y>84</y><width>82</width><height>22</height></rect></property>
+    <property name="text"><string>500</string></property>
+   </widget>
+   <widget class="QLabel" name="label_ForceFriction">
+    <property name="geometry"><rect><x>12</x><y>114</y><width>80</width><height>22</height></rect></property>
+    <property name="text"><string>摩擦前馈</string></property>
+   </widget>
+   <widget class="QLineEdit" name="lineEdit_ForceFriction">
+    <property name="geometry"><rect><x>96</x><y>114</y><width>82</width><height>22</height></rect></property>
+    <property name="text"><string>0</string></property>
+   </widget>
+   <widget class="QLabel" name="label_ForceTorqueLimit">
+    <property name="geometry"><rect><x>12</x><y>144</y><width>80</width><height>22</height></rect></property>
+    <property name="text"><string>扭矩限幅</string></property>
+   </widget>
+   <widget class="QLineEdit" name="lineEdit_ForceTorqueLimit">
+    <property name="geometry"><rect><x>96</x><y>144</y><width>82</width><height>22</height></rect></property>
+    <property name="text"><string>1000</string></property>
+   </widget>
+   <widget class="QLabel" name="label_GratingLoopTarget1">
+    <property name="geometry"><rect><x>12</x><y>174</y><width>80</width><height>22</height></rect></property>
+    <property name="text"><string>光栅1目标</string></property>
+   </widget>
+   <widget class="QLineEdit" name="lineEdit_GratingLoopTarget1">
+    <property name="geometry"><rect><x>96</x><y>174</y><width>82</width><height>22</height></rect></property>
+    <property name="text"><string>0</string></property>
+   </widget>
+   <widget class="QLabel" name="label_GratingLoopTarget2">
+    <property name="geometry"><rect><x>12</x><y>204</y><width>80</width><height>22</height></rect></property>
+    <property name="text"><string>光栅2目标</string></property>
+   </widget>
+   <widget class="QLineEdit" name="lineEdit_GratingLoopTarget2">
+    <property name="geometry"><rect><x>96</x><y>204</y><width>82</width><height>22</height></rect></property>
+    <property name="text"><string>0</string></property>
+   </widget>
+   <widget class="QPushButton" name="pushButton_StartGratingLoop1">
+    <property name="geometry"><rect><x>12</x><y>235</y><width>80</width><height>24</height></rect></property>
+    <property name="text"><string>启动光栅1</string></property>
+   </widget>
+   <widget class="QPushButton" name="pushButton_StopGratingLoop1">
+    <property name="geometry"><rect><x>98</x><y>235</y><width>80</width><height>24</height></rect></property>
+    <property name="text"><string>停止光栅1</string></property>
+   </widget>
+   <widget class="QPushButton" name="pushButton_StartGratingLoop2">
+    <property name="geometry"><rect><x>12</x><y>268</y><width>80</width><height>24</height></rect></property>
+    <property name="text"><string>启动光栅2</string></property>
+   </widget>
+   <widget class="QPushButton" name="pushButton_StopGratingLoop2">
+    <property name="geometry"><rect><x>98</x><y>268</y><width>80</width><height>24</height></rect></property>
+    <property name="text"><string>停止光栅2</string></property>
+   </widget>
+   <widget class="QPushButton" name="pushButton_StopGratingLoopAll">
+    <property name="geometry"><rect><x>12</x><y>300</y><width>166</width><height>24</height></rect></property>
+    <property name="text"><string>停止全部闭环</string></property>
+   </widget>
   </widget>
 
   <widget class="QGroupBox" name="groupBox_Display">
@@ -124,24 +205,33 @@
    <property name="geometry"><rect><x>20</x><y>520</y><width>250</width><height>135</height></rect></property>
    <property name="title"><string>力反馈</string></property>
    <widget class="QLabel" name="label_ForceVel">
-    <property name="geometry"><rect><x>18</x><y>30</y><width>90</width><height>24</height></rect></property>
-    <property name="text"><string>速度(p/s)</string></property>
+    <property name="geometry"><rect><x>18</x><y>24</y><width>90</width><height>24</height></rect></property>
+    <property name="text"><string>光栅1目标</string></property>
    </widget>
    <widget class="QLineEdit" name="lineEdit_ForceVel">
-    <property name="geometry"><rect><x>115</x><y>30</y><width>115</width><height>26</height></rect></property>
+    <property name="geometry"><rect><x>115</x><y>24</y><width>115</width><height>24</height></rect></property>
     <property name="text"><string>0</string></property>
-    <property name="placeholderText"><string>回车更新速度</string></property>
+    <property name="placeholderText"><string>光栅1 pulse</string></property>
+   </widget>
+   <widget class="QLabel" name="label_ForceTarget2">
+    <property name="geometry"><rect><x>18</x><y>52</y><width>90</width><height>24</height></rect></property>
+    <property name="text"><string>光栅2目标</string></property>
+   </widget>
+   <widget class="QLineEdit" name="lineEdit_ForceTarget2">
+    <property name="geometry"><rect><x>115</x><y>52</y><width>115</width><height>24</height></rect></property>
+    <property name="text"><string>0</string></property>
+    <property name="placeholderText"><string>光栅2 pulse</string></property>
    </widget>
    <widget class="QPushButton" name="pushButton_StartForce">
-    <property name="geometry"><rect><x>20</x><y>70</y><width>95</width><height>30</height></rect></property>
+    <property name="geometry"><rect><x>20</x><y>82</y><width>95</width><height>26</height></rect></property>
     <property name="text"><string>启动力反馈</string></property>
    </widget>
    <widget class="QPushButton" name="pushButton_StopForce">
-    <property name="geometry"><rect><x>135</x><y>70</y><width>95</width><height>30</height></rect></property>
+    <property name="geometry"><rect><x>135</x><y>82</y><width>95</width><height>26</height></rect></property>
     <property name="text"><string>停止力反馈</string></property>
    </widget>
    <widget class="QPushButton" name="pushButton_DisableAxis">
-    <property name="geometry"><rect><x>20</x><y>104</y><width>210</width><height>26</height></rect></property>
+    <property name="geometry"><rect><x>20</x><y>112</y><width>210</width><height>22</height></rect></property>
     <property name="font"><font><pointsize>12</pointsize></font></property>
     <property name="text"><string>总失能</string></property>
    </widget>

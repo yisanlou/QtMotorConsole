@@ -88,6 +88,7 @@ private slots:
 
 private:
     void setupUiState();
+    void applyGratingClosedLoopConfig();
     void setupPlotScene();
     void setupConnections();
     void resetWaveBuffers();
