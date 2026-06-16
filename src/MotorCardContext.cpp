@@ -25,14 +25,14 @@ long g_sampleTorqueCache[kMaxAxisCount] = {};
 int g_nextSampleTorqueAxis = 1;
 bool g_grating1ReadErrorLogged = false;
 bool g_grating2ReadErrorLogged = false;
-int g_grating2EncoderIndex = 2;
-int g_nextGrating2ProbeIndex = 2;
+int g_grating2EncoderIndex = 3;
 long g_grating2LastValue = 0;
 int g_grating2UnchangedCount = 0;
-long g_gratingProbeLastValue[kMaxGratingEncoderIndex + 1] = {};
-bool g_gratingProbeHasValue[kMaxGratingEncoderIndex + 1] = {};
 std::atomic_long g_gratingOffset1(0);
 std::atomic_long g_gratingOffset2(0);
+std::atomic_long g_uiGrating1(0);
+std::atomic_long g_uiGrating2(0);
+std::atomic_bool g_uiGratingSampleValid(false);
 
 void ResetFastSampleCache()
 {
@@ -42,15 +42,12 @@ void ResetFastSampleCache()
     g_nextSampleTorqueAxis = 1;
     g_grating1ReadErrorLogged = false;
     g_grating2ReadErrorLogged = false;
-    g_grating2EncoderIndex = 2;
-    g_nextGrating2ProbeIndex = 2;
+    g_grating2EncoderIndex = 3;
     g_grating2LastValue = 0;
     g_grating2UnchangedCount = 0;
-    for (int i = 0; i <= kMaxGratingEncoderIndex; i++)
-    {
-        g_gratingProbeLastValue[i] = 0;
-        g_gratingProbeHasValue[i] = false;
-    }
+    g_uiGrating1 = 0;
+    g_uiGrating2 = 0;
+    g_uiGratingSampleValid = false;
 }
 
 bool IsValidAxis(int axis)

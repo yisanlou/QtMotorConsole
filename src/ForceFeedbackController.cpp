@@ -20,6 +20,40 @@ constexpr double kAxis4KpPermillePerPulse = 0.2;
 constexpr double kAxis4KdPermillePerPulsePerSecond = 0.02;
 constexpr double kAxis4Axis2TorqueFeedForwardScale = 1.0;
 
+int CopyAxis2TorqueConfigToAxis4(const QString& modeName)
+{
+    int res = 0;
+    int ret = 0;
+
+    long axis2TorqueSource = ReadSdoLong(kAxis2TorqueLoopAxis, kIndexTorqueCommandSource, 0x00, &ret);
+    if (ret == 0)
+    {
+        res = AddStepResult(res, modeName, QStringLiteral("Copy axis2 PA25 to axis4"),
+            g_MultiCard.MC_ECatSetSdoValue(kAxis4TorqueFollowerAxis, kIndexTorqueCommandSource, 0x00, axis2TorqueSource, 2));
+    }
+    else
+    {
+        logMessage(QStringLiteral("%1：读取轴2 PA25失败，返回值=%2，轴4将继续使用当前PA25")
+            .arg(modeName)
+            .arg(ret));
+    }
+
+    long axis2MaxTorque = ReadSdoLong(kAxis2TorqueLoopAxis, 0x6072, 0x00, &ret);
+    if (ret == 0 && axis2MaxTorque > 0)
+    {
+        res = AddStepResult(res, modeName, QStringLiteral("Copy axis2 max torque 6072h to axis4"),
+            g_MultiCard.MC_ECatSetSdoValue(kAxis4TorqueFollowerAxis, 0x6072, 0x00, axis2MaxTorque, 2));
+    }
+    else if (ret != 0)
+    {
+        logMessage(QStringLiteral("%1：读取轴2 6072h失败，返回值=%2，轴4将继续使用当前6072h")
+            .arg(modeName)
+            .arg(ret));
+    }
+
+    return res;
+}
+
 double Sign(double value)
 {
     if (value > 0.0)
@@ -58,7 +92,7 @@ bool ReadForceFeedbackGrating1(long* position)
     if (!ReadGratingEncoder(1, &rawValue))
         return false;
 
-    *position = rawValue - g_gratingOffset1.load();
+    *position = g_gratingOffset1.load() - rawValue;
     return true;
 }
 
@@ -68,7 +102,7 @@ bool ReadForceFeedbackGrating2(long* position)
     if (!ReadGratingEncoder(g_grating2EncoderIndex, &rawValue))
         return false;
 
-    *position = rawValue - g_gratingOffset2.load();
+    *position = g_gratingOffset2.load() - rawValue;
     return true;
 }
 
@@ -98,6 +132,7 @@ bool PrepareAxis4TorqueFollower()
 {
     const QString modeName = QStringLiteral("Force feedback axis4 torque follower");
     int res = 0;
+    res = AddStepResult(res, modeName, QStringLiteral("Mirror axis2 torque config"), CopyAxis2TorqueConfigToAxis4(modeName));
     res = AddStepResult(res, modeName, QStringLiteral("Clear target torque 6071h"),
         SetTargetTorque(kAxis4TorqueFollowerAxis, 0, modeName, QStringLiteral("Clear target torque 6071h"), false));
     res = AddStepResult(res, modeName, QStringLiteral("Update zero torque"),

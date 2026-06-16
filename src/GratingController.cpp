@@ -59,7 +59,6 @@ bool PrepareGratingZeroAxis(int axis, const QString& modeName)
     res = AddStepResult(res, modeName, QStringLiteral("Update zero command"), g_MultiCard.MC_Update(1 << (axis - 1)));
     if (res != 0)
         return false;
-
     if (!SwitchAxisMode(axis, kModeCsv, modeName))
         return false;
     if (!EnableAxisCiA402(axis, modeName))
@@ -93,12 +92,10 @@ bool ReadGratingSensorTriggered(int grating, bool* triggered)
     return ReadGratingSensorTriggeredInternal(grating, triggered);
 }
 
-static long ReadGratingRawValue(int grating)
+static bool ReadGratingRawValue(int grating, long* value)
 {
-    long value = 0;
     int encoderIndex = (grating == 2) ? g_grating2EncoderIndex : 1;
-    ReadGratingEncoder(encoderIndex, &value);
-    return value;
+    return ReadGratingEncoder(encoderIndex, value);
 }
 
 static void GratingZeroWorker(int grating)
@@ -277,7 +274,13 @@ static void GratingZeroWorker(int grating)
         return;
     }
 
-    long zeroPoint = ReadGratingRawValue(grating);
+    long zeroPoint = 0;
+    if (!ReadGratingRawValue(grating, &zeroPoint))
+    {
+        g_gratingZeroRunning = false;
+        logMessage(QStringLiteral("%1：读取释放边沿光栅原始值失败，偏置未改变。").arg(modeName));
+        return;
+    }
     if (grating == 2)
         g_gratingOffset2 = zeroPoint;
     else

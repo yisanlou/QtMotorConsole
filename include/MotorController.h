@@ -17,7 +17,7 @@ void SetForceFeedbackTargets(long targetGrating1Pos, long targetGrating2Pos);
 void StopForceFeedback();
 void ForceFeedback(long targetGratingPos);
 void ForceFeedback(long targetGrating1Pos, long targetGrating2Pos);
-void SetGratingClosedLoopConfig(double kp, double ki, double integralLimit, double frictionFeedForward, long torqueLimit);
+void SetGratingClosedLoopConfig(double kp, double ki, double integralLimit, double kd, double frictionCompensation, long torqueLimit);
 void StartGratingClosedLoop(int grating, long targetPos);
 void StopGratingClosedLoop(int grating);
 void StopAllGratingClosedLoop();

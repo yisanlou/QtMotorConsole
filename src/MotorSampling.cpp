@@ -39,40 +39,6 @@ bool ReadGratingEncoder(int encoderIndex, long* value, int* ret)
     return true;
 }
 
-static void ProbeGrating2Encoder(long grating1Value)
-{
-    int probeIndex = g_nextGrating2ProbeIndex;
-    for (int i = 0; i < kMaxGratingEncoderIndex; i++)
-    {
-        if (probeIndex > kMaxGratingEncoderIndex)
-            probeIndex = 2;
-        if (probeIndex != 1 && probeIndex != g_grating2EncoderIndex)
-            break;
-        probeIndex++;
-    }
-
-    long probeValue = 0;
-    if (ReadGratingEncoder(probeIndex, &probeValue))
-    {
-        if (g_gratingProbeHasValue[probeIndex] &&
-            probeValue != g_gratingProbeLastValue[probeIndex] &&
-            probeValue != grating1Value)
-        {
-            g_grating2EncoderIndex = probeIndex;
-            g_grating2ReadErrorLogged = false;
-            g_grating2UnchangedCount = 0;
-            logMessage(QStringLiteral("光栅尺2：自动切换到编码器通道%1读取").arg(probeIndex));
-        }
-
-        g_gratingProbeLastValue[probeIndex] = probeValue;
-        g_gratingProbeHasValue[probeIndex] = true;
-    }
-
-    g_nextGrating2ProbeIndex = probeIndex + 1;
-    if (g_nextGrating2ProbeIndex > kMaxGratingEncoderIndex)
-        g_nextGrating2ProbeIndex = 2;
-}
-
 MotorSample ReadFastSample()
 {
     MotorSample sample;
@@ -135,11 +101,11 @@ MotorSample ReadFastSample()
     if (g_nextSampleTorqueAxis > activeAxisCount)
         g_nextSampleTorqueAxis = 1;
 
-    long gratingValue = 0;
     int gratingRet = 0;
+    long gratingValue = 0;
     if (ReadGratingEncoder(1, &gratingValue, &gratingRet))
     {
-        sample.grating1 = gratingValue - g_gratingOffset1.load();
+        sample.grating1 = g_gratingOffset1.load() - gratingValue;
     }
     else if (!g_grating1ReadErrorLogged)
     {
@@ -150,7 +116,7 @@ MotorSample ReadFastSample()
     if (ReadGratingEncoder(g_grating2EncoderIndex, &gratingValue, &gratingRet))
     {
         long grating2Raw = gratingValue;
-        sample.grating2 = grating2Raw - g_gratingOffset2.load();
+        sample.grating2 = g_gratingOffset2.load() - grating2Raw;
         if (grating2Raw == g_grating2LastValue)
             g_grating2UnchangedCount++;
         else
@@ -162,7 +128,7 @@ MotorSample ReadFastSample()
     else if (!g_grating2ReadErrorLogged)
     {
         g_grating2ReadErrorLogged = true;
-        sample.grating2 = g_grating2LastValue - g_gratingOffset2.load();
+        sample.grating2 = g_gratingOffset2.load() - g_grating2LastValue;
         g_grating2UnchangedCount++;
         logMessage(QStringLiteral("光栅尺2：MC_GetEncPos(%1)读取失败，返回值=%2")
             .arg(g_grating2EncoderIndex)
@@ -170,12 +136,9 @@ MotorSample ReadFastSample()
     }
     else
     {
-        sample.grating2 = g_grating2LastValue - g_gratingOffset2.load();
+        sample.grating2 = g_gratingOffset2.load() - g_grating2LastValue;
         g_grating2UnchangedCount++;
     }
-
-    if (g_grating2UnchangedCount >= 40)
-        ProbeGrating2Encoder(sample.grating1);
 
     sample.gratingSensor1Valid = ReadGratingSensorTriggeredInternal(1, &sample.gratingSensor1Triggered);
     sample.gratingSensor2Valid = ReadGratingSensorTriggeredInternal(2, &sample.gratingSensor2Triggered);

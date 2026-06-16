@@ -1,5 +1,6 @@
 ﻿#include "QtMotorConsole.h"
 #include "MotorController.h"
+#include "MotorInternal.h"
 #include "SaveData.h"
 #include <QThread>
 #include <QDebug>
@@ -135,9 +136,17 @@ void QtMotorConsole::setupUiState()
     ui.lineEdit_ForceKi->setValidator(new QDoubleValidator(-1000000.0, 1000000.0, 6, this));
     ui.lineEdit_ForceILimit->setValidator(new QDoubleValidator(0.0, 1000000.0, 6, this));
     ui.lineEdit_ForceFriction->setValidator(new QDoubleValidator(-1000000.0, 1000000.0, 6, this));
+    ui.lineEdit_ForceFrictionComp->setValidator(new QDoubleValidator(0.0, 1000000.0, 6, this));
     ui.lineEdit_ForceTorqueLimit->setValidator(new QIntValidator(0, 1000, this));
     ui.lineEdit_GratingLoopTarget1->setValidator(new QIntValidator(-1000000000, 1000000000, this));
     ui.lineEdit_GratingLoopTarget2->setValidator(new QIntValidator(-1000000000, 1000000000, this));
+    ui.label_ForceFriction->setText(QStringLiteral("Kd"));
+    ui.lineEdit_ForceKp->setText(QStringLiteral("0.0001"));
+    ui.lineEdit_ForceKi->setText(QStringLiteral("0.00001"));
+    ui.lineEdit_ForceILimit->setText(QStringLiteral("200"));
+    ui.lineEdit_ForceFriction->setText(QStringLiteral("0.00002"));
+    ui.lineEdit_ForceFrictionComp->setText(QStringLiteral("30"));
+    ui.lineEdit_ForceTorqueLimit->setText(QStringLiteral("900"));
     ui.label_ForceVel->setText(QStringLiteral("光栅1目标"));
     ui.lineEdit_ForceVel->setPlaceholderText(QStringLiteral("光栅1 pulse"));
     ui.label_ForceTarget2->setVisible(false);
@@ -159,6 +168,7 @@ void QtMotorConsole::applyGratingClosedLoopConfig()
         ui.lineEdit_ForceKi->text().toDouble(),
         ui.lineEdit_ForceILimit->text().toDouble(),
         ui.lineEdit_ForceFriction->text().toDouble(),
+        ui.lineEdit_ForceFrictionComp->text().toDouble(),
         ui.lineEdit_ForceTorqueLimit->text().toLong());
 }
 
@@ -228,6 +238,7 @@ void QtMotorConsole::setupConnections()
     connect(ui.lineEdit_ForceKi, &QLineEdit::returnPressed, this, updateGratingLoopConfig);
     connect(ui.lineEdit_ForceILimit, &QLineEdit::returnPressed, this, updateGratingLoopConfig);
     connect(ui.lineEdit_ForceFriction, &QLineEdit::returnPressed, this, updateGratingLoopConfig);
+    connect(ui.lineEdit_ForceFrictionComp, &QLineEdit::returnPressed, this, updateGratingLoopConfig);
     connect(ui.lineEdit_ForceTorqueLimit, &QLineEdit::returnPressed, this, updateGratingLoopConfig);
     connect(ui.pushButton_StartGratingLoop1, &QPushButton::clicked, this, [this]() {
         applyGratingClosedLoopConfig();
@@ -807,6 +818,9 @@ void QtMotorConsole::sampleLoop()
             std::lock_guard<std::mutex> lock(m_sampleMutex);
             m_latestSample = sample;
         }
+        g_uiGrating1 = sample.grating1;
+        g_uiGrating2 = sample.grating2;
+        g_uiGratingSampleValid = true;
 
         auto execEnd = std::chrono::steady_clock::now();
         long long execUs = std::chrono::duration_cast<std::chrono::microseconds>(execEnd - execStart).count();

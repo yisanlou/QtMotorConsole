@@ -54,16 +54,6 @@ int SetTargetTorque(int axis, long torque, const QString& modeName, const QStrin
             .arg(targetTorque));
     }
 
-    int limitRet = 0;
-    long maxTorque = ReadSdoLong(axis, 0x6072, 0x00, &limitRet);
-    if (limitRet == 0 && maxTorque > 0)
-    {
-        if (targetTorque > maxTorque)
-            targetTorque = maxTorque;
-        else if (targetTorque < -maxTorque)
-            targetTorque = -maxTorque;
-    }
-
     int ret = g_MultiCard.MC_ECatSetSdoValue(axis, 0x6071, 0x00, targetTorque, 2);
     if (ret != 0)
     {

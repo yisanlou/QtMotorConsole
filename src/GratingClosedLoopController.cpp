@@ -9,31 +9,87 @@ namespace {
 
 constexpr int kLoopPeriodUs = 5000;
 constexpr long kPositionDeadbandPulse = 5;
-constexpr double kDefaultKpPermillePerPulse = 0.2;
-constexpr double kDefaultKiPermillePerPulseSecond = 0.02;
-constexpr double kDefaultIntegralLimitPermille = 500.0;
-constexpr double kDefaultFrictionFeedForwardPermille = 0.0;
-constexpr long kDefaultTorqueLimitPermille = 1000;
+constexpr double kFullStrokePulse = 9000000.0;
+constexpr double kDefaultKpPermillePerPulse = 900.0 / kFullStrokePulse;
+constexpr double kDefaultKiPermillePerPulseSecond = 0.00001;
+constexpr double kDefaultKdPermillePerPulseSecond = 0.00002;
+constexpr double kDefaultIntegralLimitPermille = 200.0;
+constexpr double kDefaultFrictionCompensationPermille = 30.0;
+constexpr double kDerivativeFilterLastWeight = 0.75;
+constexpr double kDerivativeFilterCurrentWeight = 0.25;
+constexpr long kDefaultTorqueLimitPermille = 900;
 
 std::atomic<double> g_gratingLoopKp(kDefaultKpPermillePerPulse);
 std::atomic<double> g_gratingLoopKi(kDefaultKiPermillePerPulseSecond);
+std::atomic<double> g_gratingLoopKd(kDefaultKdPermillePerPulseSecond);
 std::atomic<double> g_gratingLoopIntegralLimit(kDefaultIntegralLimitPermille);
-std::atomic<double> g_gratingLoopFrictionFeedForward(kDefaultFrictionFeedForwardPermille);
+std::atomic<double> g_gratingLoopFrictionCompensation(kDefaultFrictionCompensationPermille);
 std::atomic_long g_gratingLoopTorqueLimit(kDefaultTorqueLimitPermille);
+
+struct PidState
+{
+    double integralPermille = 0.0;
+    double filteredVelocityPulsePerSecond = 0.0;
+    long lastPosition = 0;
+    bool hasLastPosition = false;
+};
+
+struct PidOutput
+{
+    long torque = 0;
+    double p = 0.0;
+    double i = 0.0;
+    double d = 0.0;
+    double friction = 0.0;
+};
 
 int AxisForGrating(int grating)
 {
     return grating == 2 ? 4 : 2;
 }
 
-int EncoderForGrating(int grating)
+int CopyAxis2TorqueConfigToAxis4(const QString& modeName)
 {
-    return grating == 2 ? g_grating2EncoderIndex : 1;
+    int res = 0;
+    int ret = 0;
+
+    long axis2TorqueSource = ReadSdoLong(2, kIndexTorqueCommandSource, 0x00, &ret);
+    if (ret == 0)
+    {
+        res = AddStepResult(res, modeName, QStringLiteral("Copy axis2 PA25 to axis4"),
+            g_MultiCard.MC_ECatSetSdoValue(4, kIndexTorqueCommandSource, 0x00, axis2TorqueSource, 2));
+    }
+    else
+    {
+        logMessage(QStringLiteral("%1：读取轴2 PA25失败，返回值=%2，轴4将继续使用当前PA25")
+            .arg(modeName)
+            .arg(ret));
+    }
+
+    long axis2MaxTorque = ReadSdoLong(2, 0x6072, 0x00, &ret);
+    if (ret == 0 && axis2MaxTorque > 0)
+    {
+        res = AddStepResult(res, modeName, QStringLiteral("Copy axis2 max torque 6072h to axis4"),
+            g_MultiCard.MC_ECatSetSdoValue(4, 0x6072, 0x00, axis2MaxTorque, 2));
+    }
+    else if (ret != 0)
+    {
+        logMessage(QStringLiteral("%1：读取轴2 6072h失败，返回值=%2，轴4将继续使用当前6072h")
+            .arg(modeName)
+            .arg(ret));
+    }
+
+    return res;
 }
 
-long OffsetForGrating(int grating)
+int PositionDirectionForGrating(int grating)
 {
-    return grating == 2 ? g_gratingOffset2.load() : g_gratingOffset1.load();
+    return 1;
+}
+
+int AxisTorqueDirectionForGrating(int grating)
+{
+    return grating == 1 ? -1 : 1;
 }
 
 double Sign(double value)
@@ -43,6 +99,16 @@ double Sign(double value)
     if (value < 0.0)
         return -1.0;
     return 0.0;
+}
+
+long ToLoopPosition(int grating, long uiPosition)
+{
+    return (long)PositionDirectionForGrating(grating) * uiPosition;
+}
+
+long ToAxisTorque(int grating, long loopTorque)
+{
+    return (long)AxisTorqueDirectionForGrating(grating) * loopTorque;
 }
 
 long ClampTorque(long torque)
@@ -73,14 +139,14 @@ double ClampIntegral(double integral)
     return integral;
 }
 
-bool ReadLoopGrating(int grating, long* position)
+double TorqueLimit()
 {
-    long rawValue = 0;
-    if (!ReadGratingEncoder(EncoderForGrating(grating), &rawValue))
-        return false;
-
-    *position = rawValue - OffsetForGrating(grating);
-    return true;
+    double limit = (double)g_gratingLoopTorqueLimit.load();
+    if (limit < 0.0)
+        limit = -limit;
+    if (limit <= 0.0)
+        limit = (double)kDefaultTorqueLimitPermille;
+    return limit;
 }
 
 bool PrepareLoopAxis(int grating)
@@ -89,6 +155,13 @@ bool PrepareLoopAxis(int grating)
     const QString modeName = QStringLiteral("Grating closed-loop debug");
 
     int res = 0;
+    if (axis == 4)
+    {
+        res = AddStepResult(res, modeName, QStringLiteral("Mirror axis2 torque config"), CopyAxis2TorqueConfigToAxis4(modeName));
+        if (res != 0)
+            return false;
+    }
+
     res = AddStepResult(res, modeName, QStringLiteral("Clear target torque 6071h"),
         SetTargetTorque(axis, 0, modeName, QStringLiteral("Clear target torque 6071h"), false));
     res = AddStepResult(res, modeName, QStringLiteral("Update zero torque"),
@@ -107,27 +180,51 @@ bool PrepareLoopAxis(int grating)
     return true;
 }
 
-long CalculateLoopTorque(long targetPos, long currentPos, double* integralPermille)
+PidOutput CalculateLoopTorque(long targetPos, long currentPos, PidState* state)
 {
+    PidOutput output;
     long error = targetPos - currentPos;
     if (std::labs(error) <= kPositionDeadbandPulse)
     {
-        *integralPermille = 0.0;
-        return 0;
+        state->integralPermille = 0.0;
+        state->filteredVelocityPulsePerSecond = 0.0;
+        state->lastPosition = currentPos;
+        state->hasLastPosition = true;
+        return output;
     }
 
     const double periodSecond = (double)kLoopPeriodUs / 1000000.0;
-    double p = g_gratingLoopKp.load() * (double)error;
-    *integralPermille = ClampIntegral(*integralPermille +
+    double velocityPulsePerSecond = 0.0;
+    if (state->hasLastPosition)
+        velocityPulsePerSecond = ((double)currentPos - (double)state->lastPosition) / periodSecond;
+    state->lastPosition = currentPos;
+    state->hasLastPosition = true;
+
+    state->filteredVelocityPulsePerSecond =
+        state->filteredVelocityPulsePerSecond * kDerivativeFilterLastWeight +
+        velocityPulsePerSecond * kDerivativeFilterCurrentWeight;
+
+    output.p = g_gratingLoopKp.load() * (double)error;
+    output.d = -g_gratingLoopKd.load() * state->filteredVelocityPulsePerSecond;
+
+    double nextIntegral = ClampIntegral(state->integralPermille +
         g_gratingLoopKi.load() * (double)error * periodSecond);
 
-    double torque = p + *integralPermille;
-    double direction = Sign(torque);
+    double rawTorque = output.p + nextIntegral + output.d;
+    double limit = TorqueLimit();
+    bool saturatedHigh = rawTorque > limit && error > 0;
+    bool saturatedLow = rawTorque < -limit && error < 0;
+    if (!saturatedHigh && !saturatedLow)
+        state->integralPermille = nextIntegral;
+
+    output.i = state->integralPermille;
+    double pidTorque = output.p + output.i + output.d;
+    double direction = Sign(pidTorque);
     if (direction == 0.0)
         direction = Sign((double)error);
-    torque += direction * g_gratingLoopFrictionFeedForward.load();
-
-    return ClampTorque(RoundToLong(torque));
+    output.friction = direction * std::fabs(g_gratingLoopFrictionCompensation.load());
+    output.torque = ClampTorque(RoundToLong(pidTorque + output.friction));
+    return output;
 }
 
 void ClearLoopTorque(int grating)
@@ -166,31 +263,54 @@ void GratingClosedLoopWorker(int grating, long targetPos)
     }
 
     long position = 0;
-    if (!ReadLoopGrating(grating, &position))
+    if (!g_uiGratingSampleValid.load())
     {
         ClearLoopTorque(grating);
         g_gratingClosedLoopRunning[grating] = false;
-        logMessage(QStringLiteral("Grating %1 closed-loop debug failed: grating read failed.").arg(grating));
+        logMessage(QStringLiteral("Grating %1 closed-loop debug failed: UI grating sample is not ready.").arg(grating));
         return;
     }
+    long uiPosition = grating == 2 ? g_uiGrating2.load() : g_uiGrating1.load();
+    position = ToLoopPosition(grating, uiPosition);
 
-    double integralPermille = 0.0;
+    PidState pidState;
+    bool firstCommandLogged = false;
     auto nextTime = std::chrono::steady_clock::now();
     while (g_gratingClosedLoopRunning[grating])
     {
         nextTime += std::chrono::microseconds(kLoopPeriodUs);
 
-        if (!ReadLoopGrating(grating, &position))
+        if (!g_uiGratingSampleValid.load())
         {
             ClearLoopTorque(grating);
-            integralPermille = 0.0;
-            logMessage(QStringLiteral("Grating %1 closed-loop debug: read failed, torque cleared.").arg(grating));
+            pidState = PidState();
+            logMessage(QStringLiteral("Grating %1 closed-loop debug: UI grating sample is not ready, torque cleared.").arg(grating));
             std::this_thread::sleep_until(nextTime);
             continue;
         }
+        uiPosition = grating == 2 ? g_uiGrating2.load() : g_uiGrating1.load();
+        position = ToLoopPosition(grating, uiPosition);
 
-        long torque = CalculateLoopTorque(targetPos, position, &integralPermille);
-        SetTargetTorque(axis, torque, QStringLiteral("Grating closed-loop debug"), QStringLiteral("Set target torque 6071h"), false);
+        PidOutput pid = CalculateLoopTorque(targetPos, position, &pidState);
+        long axisTorque = ToAxisTorque(grating, pid.torque);
+        if (!firstCommandLogged)
+        {
+            firstCommandLogged = true;
+            logMessage(QStringLiteral("Grating %1 closed-loop debug first command: target=%2, uiPosition=%3, loopPosition=%4, error=%5, P=%6, I=%7, D=%8, F=%9, loopTorque=%10, axis%11Torque=%12")
+                .arg(grating)
+                .arg(targetPos)
+                .arg(uiPosition)
+                .arg(position)
+                .arg(targetPos - position)
+                .arg(pid.p, 0, 'f', 2)
+                .arg(pid.i, 0, 'f', 2)
+                .arg(pid.d, 0, 'f', 2)
+                .arg(pid.friction, 0, 'f', 2)
+                .arg(pid.torque)
+                .arg(axis)
+                .arg(axisTorque));
+        }
+        SetTargetTorque(axis, axisTorque, QStringLiteral("Grating closed-loop debug"), QStringLiteral("Set target torque 6071h"), false);
         g_MultiCard.MC_Update(1 << (axis - 1));
 
         std::this_thread::sleep_until(nextTime);
@@ -202,12 +322,13 @@ void GratingClosedLoopWorker(int grating, long targetPos)
 
 }
 
-void SetGratingClosedLoopConfig(double kp, double ki, double integralLimit, double frictionFeedForward, long torqueLimit)
+void SetGratingClosedLoopConfig(double kp, double ki, double integralLimit, double kd, double frictionCompensation, long torqueLimit)
 {
     g_gratingLoopKp = kp;
     g_gratingLoopKi = ki;
+    g_gratingLoopKd = kd;
     g_gratingLoopIntegralLimit = integralLimit;
-    g_gratingLoopFrictionFeedForward = frictionFeedForward;
+    g_gratingLoopFrictionCompensation = frictionCompensation;
     g_gratingLoopTorqueLimit = torqueLimit;
 }
 

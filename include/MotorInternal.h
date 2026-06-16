@@ -25,8 +25,6 @@ constexpr unsigned short kControlShutdown = 0x0006;
 constexpr unsigned short kControlSwitchOn = 0x0007;
 constexpr unsigned short kControlEnableOperation = 0x000F;
 constexpr unsigned short kControlFaultReset = 0x0080;
-constexpr int kMaxGratingEncoderIndex = 8;
-
 extern MultiCard g_MultiCard;
 extern std::atomic_bool g_bFollowRunning;
 extern std::atomic_bool g_cardOpened;
@@ -48,13 +46,13 @@ extern int g_nextSampleTorqueAxis;
 extern bool g_grating1ReadErrorLogged;
 extern bool g_grating2ReadErrorLogged;
 extern int g_grating2EncoderIndex;
-extern int g_nextGrating2ProbeIndex;
 extern long g_grating2LastValue;
 extern int g_grating2UnchangedCount;
-extern long g_gratingProbeLastValue[kMaxGratingEncoderIndex + 1];
-extern bool g_gratingProbeHasValue[kMaxGratingEncoderIndex + 1];
 extern std::atomic_long g_gratingOffset1;
 extern std::atomic_long g_gratingOffset2;
+extern std::atomic_long g_uiGrating1;
+extern std::atomic_long g_uiGrating2;
+extern std::atomic_bool g_uiGratingSampleValid;
 
 void ResetFastSampleCache();
 bool IsValidAxis(int axis);
