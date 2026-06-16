@@ -17,6 +17,10 @@ struct MotorSample
     long torque4 = 0;
     long grating1 = 0;
     long grating2 = 0;
+    bool gratingSensor1Triggered = false;
+    bool gratingSensor2Triggered = false;
+    bool gratingSensor1Valid = false;
+    bool gratingSensor2Valid = false;
 };
 
 #endif // MOTORTYPES_H

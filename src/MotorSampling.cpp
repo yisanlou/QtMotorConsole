@@ -177,6 +177,9 @@ MotorSample ReadFastSample()
     if (g_grating2UnchangedCount >= 40)
         ProbeGrating2Encoder(sample.grating1);
 
+    sample.gratingSensor1Valid = ReadGratingSensorTriggeredInternal(1, &sample.gratingSensor1Triggered);
+    sample.gratingSensor2Valid = ReadGratingSensorTriggeredInternal(2, &sample.gratingSensor2Triggered);
+
     if (activeAxisCount >= 1)
     {
         sample.torque1 = g_sampleTorqueCache[0];

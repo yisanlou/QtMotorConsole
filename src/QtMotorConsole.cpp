@@ -149,6 +149,8 @@ void QtMotorConsole::setupUiState()
     ui.checkBox_Vel->setText(QStringLiteral("速度(pulse/s)"));
     ui.checkBox_Torque->setText(QStringLiteral("力矩(0.1%)"));
     ui.checkBox_Grating->setText(QStringLiteral("光栅尺(kpulse)"));
+    ui.label_GratingSensor1Value->setText(QStringLiteral("未知"));
+    ui.label_GratingSensor2Value->setText(QStringLiteral("未知"));
 }
 
 void QtMotorConsole::applyGratingClosedLoopConfig()
@@ -393,6 +395,7 @@ void QtMotorConsole::updateWave()
     }
 
     m_lastRenderedSampleIndex = sample.sampleIndex;
+    updateGratingSensorStatus(sample);
 
     long pos = sample.pos1;
     long vel = sample.vel1;
@@ -794,6 +797,10 @@ void QtMotorConsole::sampleLoop()
         sample.torque4 = motorSample.torque4;
         sample.grating1 = motorSample.grating1;
         sample.grating2 = motorSample.grating2;
+        sample.gratingSensor1Triggered = motorSample.gratingSensor1Triggered;
+        sample.gratingSensor2Triggered = motorSample.gratingSensor2Triggered;
+        sample.gratingSensor1Valid = motorSample.gratingSensor1Valid;
+        sample.gratingSensor2Valid = motorSample.gratingSensor2Valid;
         sample.valid = true;
 
         {
@@ -814,10 +821,42 @@ void QtMotorConsole::sampleLoop()
 
 void QtMotorConsole::updatePerformancePanel()
 {
+    SampleState sample;
+    {
+        std::lock_guard<std::mutex> lock(m_sampleMutex);
+        sample = m_latestSample;
+    }
+    updateGratingSensorStatus(sample);
+
     ui.label_UiExecValue->setText(QString("%1 us").arg(m_uiExecMaxUs));
     ui.label_SampleExecValue->setText(QString("%1 us").arg(m_sampleExecMaxUs.exchange(0)));
     ui.label_ForceExecValue->setText(QString("%1 us").arg(ConsumeForceFeedbackExecMaxUs()));
     m_uiExecMaxUs = 0;
+}
+
+void QtMotorConsole::updateGratingSensorStatus(const SampleState& sample)
+{
+    auto textForSensor = [&sample](bool valid, bool triggered) {
+        if (!sample.valid)
+            return QStringLiteral("未知");
+        if (!valid)
+            return QStringLiteral("读取失败");
+        return triggered ? QStringLiteral("触发") : QStringLiteral("空闲");
+    };
+
+    ui.label_GratingSensor1Value->setText(textForSensor(sample.gratingSensor1Valid, sample.gratingSensor1Triggered));
+    ui.label_GratingSensor2Value->setText(textForSensor(sample.gratingSensor2Valid, sample.gratingSensor2Triggered));
+
+    ui.label_GratingSensor1Value->setStyleSheet(!sample.valid || !sample.gratingSensor1Valid
+        ? QStringLiteral("color: #666666;")
+        : sample.gratingSensor1Triggered
+        ? QStringLiteral("color: red; font-weight: bold;")
+        : QStringLiteral("color: #1f6f3d;"));
+    ui.label_GratingSensor2Value->setStyleSheet(!sample.valid || !sample.gratingSensor2Valid
+        ? QStringLiteral("color: #666666;")
+        : sample.gratingSensor2Triggered
+        ? QStringLiteral("color: red; font-weight: bold;")
+        : QStringLiteral("color: #1f6f3d;"));
 }
 void QtMotorConsole::closeEvent(QCloseEvent* event)
 {

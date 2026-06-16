@@ -115,6 +115,29 @@
    </widget>
   </widget>
 
+  <widget class="QGroupBox" name="groupBox_GratingSensorStatus">
+   <property name="geometry"><rect><x>910</x><y>360</y><width>190</width><height>92</height></rect></property>
+   <property name="title"><string>光栅尺传感器</string></property>
+   <widget class="QLabel" name="label_GratingSensor1Title">
+    <property name="geometry"><rect><x>12</x><y>26</y><width>92</width><height>22</height></rect></property>
+    <property name="text"><string>光栅1 X30</string></property>
+   </widget>
+   <widget class="QLabel" name="label_GratingSensor1Value">
+    <property name="geometry"><rect><x>105</x><y>26</y><width>75</width><height>22</height></rect></property>
+    <property name="text"><string>未知</string></property>
+    <property name="alignment"><set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set></property>
+   </widget>
+   <widget class="QLabel" name="label_GratingSensor2Title">
+    <property name="geometry"><rect><x>12</x><y>58</y><width>92</width><height>22</height></rect></property>
+    <property name="text"><string>光栅2 X31</string></property>
+   </widget>
+   <widget class="QLabel" name="label_GratingSensor2Value">
+    <property name="geometry"><rect><x>105</x><y>58</y><width>75</width><height>22</height></rect></property>
+    <property name="text"><string>未知</string></property>
+    <property name="alignment"><set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set></property>
+   </widget>
+  </widget>
+
   <widget class="QGroupBox" name="groupBox_Display">
    <property name="geometry"><rect><x>20</x><y>95</y><width>250</width><height>170</height></rect></property>
    <property name="title"><string>曲线显示</string></property>

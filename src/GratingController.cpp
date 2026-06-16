@@ -6,19 +6,20 @@
 
 namespace {
 constexpr short kGratingSensorCardIndex = 0; // 主模块；扩展 IO 模块从 1 开始
-constexpr long kGratingZeroFastSpeed = 100000;
-constexpr long kGratingZeroSlowSpeed = 10000;
+constexpr long kGratingZeroFastSpeed = 3000000;
+constexpr long kGratingZeroSlowSpeed = 300000;
 constexpr int kGratingZeroPollMs = 5;
 constexpr int kGratingZeroSearchTimeoutMs = 30000;
+constexpr unsigned short kGratingSensorTriggeredRawLevel = 0;
 
 short GratingSensorBitIndex(int grating)
 {
-    return (short)(grating - 1); // 光栅1 -> IO1(bit0)，光栅2 -> IO2(bit1)
+    return (short)(grating == 2 ? 31 : 30); // 光栅1 -> X30，光栅2 -> X31
 }
 
-bool ReadGratingSensorLevel(int grating, unsigned short* level)
+QString GratingSensorName(int grating)
 {
-    return g_MultiCard.MC_GetExtDiBit(kGratingSensorCardIndex, GratingSensorBitIndex(grating), level) == 0;
+    return QStringLiteral("X%1").arg(GratingSensorBitIndex(grating));
 }
 
 int SetGratingZeroVelocity(int axis, long speed, const QString& modeName, const QString& stepName)
@@ -69,6 +70,29 @@ bool PrepareGratingZeroAxis(int axis, const QString& modeName)
 }
 }
 
+bool ReadGratingSensorTriggeredInternal(int grating, bool* triggered, unsigned short* level)
+{
+    if (grating != 1 && grating != 2)
+        return false;
+
+    unsigned short currentLevel = 0;
+    int ret = g_MultiCard.MC_GetExtDiBit(kGratingSensorCardIndex, GratingSensorBitIndex(grating), &currentLevel);
+    if (ret != 0)
+        return false;
+
+    if (level)
+        *level = currentLevel;
+    if (triggered)
+        *triggered = (currentLevel == kGratingSensorTriggeredRawLevel);
+
+    return true;
+}
+
+bool ReadGratingSensorTriggered(int grating, bool* triggered)
+{
+    return ReadGratingSensorTriggeredInternal(grating, triggered);
+}
+
 static long ReadGratingRawValue(int grating)
 {
     long value = 0;
@@ -83,7 +107,7 @@ static void GratingZeroWorker(int grating)
     const long forwardSpeed = (grating == 2) ? -kGratingZeroFastSpeed : kGratingZeroFastSpeed;
     const long reverseSpeed = (grating == 2) ? kGratingZeroSlowSpeed : -kGratingZeroSlowSpeed;
     const QString modeName = QStringLiteral("光栅尺%1归零").arg(grating);
-    const QString sensorName = QStringLiteral("主模块IO%1").arg(grating);
+    const QString sensorName = GratingSensorName(grating);
 
     if (!IsCardOpened())
     {
@@ -104,8 +128,9 @@ static void GratingZeroWorker(int grating)
         return;
     }
 
+    bool initialTriggered = false;
     unsigned short initialLevel = 0;
-    if (!ReadGratingSensorLevel(grating, &initialLevel))
+    if (!ReadGratingSensorTriggeredInternal(grating, &initialTriggered, &initialLevel))
     {
         StopGratingZeroAxis(axis, modeName);
         g_gratingZeroRunning = false;
@@ -115,58 +140,75 @@ static void GratingZeroWorker(int grating)
         return;
     }
 
-    if (SetGratingZeroVelocity(axis, forwardSpeed, modeName, QStringLiteral("Set fast search velocity 60FFh")) != 0)
-    {
-        StopGratingZeroAxis(axis, modeName);
-        g_gratingZeroRunning = false;
-        logMessage(modeName + QStringLiteral("：高速搜索启动失败。"));
-        return;
-    }
-
-    logMessage(QStringLiteral("%1：开始，电机%2以%3 pulse/s搜索%4电平变化，初始电平=%5。")
-        .arg(modeName)
-        .arg(axis)
-        .arg(forwardSpeed)
-        .arg(sensorName)
-        .arg(initialLevel));
-
-    bool sensorTriggered = false;
+    bool sensorTriggered = initialTriggered;
     unsigned short triggerLevel = initialLevel;
-    auto nextTime = std::chrono::steady_clock::now();
-    auto searchStart = nextTime;
-    while (g_gratingZeroRunning)
+    if (!sensorTriggered)
     {
-        nextTime += std::chrono::milliseconds(kGratingZeroPollMs);
-        std::this_thread::sleep_until(nextTime);
-
-        unsigned short currentLevel = initialLevel;
-        if (!ReadGratingSensorLevel(grating, &currentLevel))
+        if (SetGratingZeroVelocity(axis, forwardSpeed, modeName, QStringLiteral("Set fast search velocity 60FFh")) != 0)
         {
             StopGratingZeroAxis(axis, modeName);
             g_gratingZeroRunning = false;
-            logMessage(QStringLiteral("%1：搜索过程中读取%2失败，偏置未改变。")
-                .arg(modeName)
-                .arg(sensorName));
+            logMessage(modeName + QStringLiteral("：高速搜索启动失败。"));
             return;
         }
 
-        if (currentLevel != initialLevel)
-        {
-            sensorTriggered = true;
-            triggerLevel = currentLevel;
-            break;
-        }
+        logMessage(QStringLiteral("%1：开始，电机%2以%3 pulse/s搜索%4触发状态，初始输入值=%5。")
+            .arg(modeName)
+            .arg(axis)
+            .arg(forwardSpeed)
+            .arg(sensorName)
+            .arg(initialLevel));
 
-        auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(nextTime - searchStart).count();
-        if (elapsedMs >= kGratingZeroSearchTimeoutMs)
-            break;
+        auto nextTime = std::chrono::steady_clock::now();
+        auto searchStart = nextTime;
+        while (g_gratingZeroRunning)
+        {
+            nextTime += std::chrono::milliseconds(kGratingZeroPollMs);
+            std::this_thread::sleep_until(nextTime);
+
+            bool currentTriggered = false;
+            unsigned short currentLevel = 0;
+            if (!ReadGratingSensorTriggeredInternal(grating, &currentTriggered, &currentLevel))
+            {
+                StopGratingZeroAxis(axis, modeName);
+                g_gratingZeroRunning = false;
+                logMessage(QStringLiteral("%1：搜索过程中读取%2失败，偏置未改变。")
+                    .arg(modeName)
+                    .arg(sensorName));
+                return;
+            }
+
+            if (currentTriggered)
+            {
+                sensorTriggered = true;
+                triggerLevel = currentLevel;
+                break;
+            }
+
+            auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(nextTime - searchStart).count();
+            if (elapsedMs >= kGratingZeroSearchTimeoutMs)
+                break;
+        }
+    }
+    else
+    {
+        logMessage(QStringLiteral("%1：开始时%2已处于触发状态，直接反向退出传感器。")
+            .arg(modeName)
+            .arg(sensorName));
+    }
+
+    if (!g_gratingZeroRunning)
+    {
+        StopGratingZeroAxis(axis, modeName);
+        logMessage(QStringLiteral("%1：已取消，偏置未改变。").arg(modeName));
+        return;
     }
 
     if (!sensorTriggered)
     {
         StopGratingZeroAxis(axis, modeName);
         g_gratingZeroRunning = false;
-        logMessage(QStringLiteral("%1：未检测到%2电平变化，偏置未改变。")
+        logMessage(QStringLiteral("%1：未检测到%2触发状态，偏置未改变。")
             .arg(modeName)
             .arg(sensorName));
         return;
@@ -188,15 +230,16 @@ static void GratingZeroWorker(int grating)
         .arg(reverseSpeed));
 
     bool sensorReleased = false;
-    nextTime = std::chrono::steady_clock::now();
-    searchStart = nextTime;
+    auto nextTime = std::chrono::steady_clock::now();
+    auto searchStart = nextTime;
     while (g_gratingZeroRunning)
     {
         nextTime += std::chrono::milliseconds(kGratingZeroPollMs);
         std::this_thread::sleep_until(nextTime);
 
+        bool currentTriggered = true;
         unsigned short currentLevel = triggerLevel;
-        if (!ReadGratingSensorLevel(grating, &currentLevel))
+        if (!ReadGratingSensorTriggeredInternal(grating, &currentTriggered, &currentLevel))
         {
             StopGratingZeroAxis(axis, modeName);
             g_gratingZeroRunning = false;
@@ -206,7 +249,7 @@ static void GratingZeroWorker(int grating)
             return;
         }
 
-        if (currentLevel != triggerLevel)
+        if (!currentTriggered)
         {
             sensorReleased = true;
             break;
@@ -219,10 +262,16 @@ static void GratingZeroWorker(int grating)
 
     StopGratingZeroAxis(axis, modeName);
 
+    if (!g_gratingZeroRunning)
+    {
+        logMessage(QStringLiteral("%1：已取消，偏置未改变。").arg(modeName));
+        return;
+    }
+
     if (!sensorReleased)
     {
         g_gratingZeroRunning = false;
-        logMessage(QStringLiteral("%1：反向退出超时，%2仍处于触发电平，偏置未改变。")
+        logMessage(QStringLiteral("%1：反向退出超时，%2仍处于触发状态，偏置未改变。")
             .arg(modeName)
             .arg(sensorName));
         return;

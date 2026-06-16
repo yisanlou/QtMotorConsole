@@ -26,6 +26,7 @@ void VelocityModeMove(int axis, long speed);
 void TorqueModeSet(int axis, long torque);
 void DisableAxis(int axis);
 void StartGratingZero(int grating);
+bool ReadGratingSensorTriggered(int grating, bool* triggered);
 
 long ReadPosition(int axis);
 long ReadVelocity(int axis);

@@ -75,5 +75,6 @@ int AddStepResult(int total, const QString& modeName, const QString& stepName, i
 bool PrepareTorqueModeCommandSource(int axis, const QString& modeName);
 int SetTargetTorque(int axis, long torque, const QString& modeName, const QString& stepName, bool verifyReadBack = true);
 bool ReadGratingEncoder(int encoderIndex, long* value, int* ret = nullptr);
+bool ReadGratingSensorTriggeredInternal(int grating, bool* triggered, unsigned short* level = nullptr);
 
 #endif // MOTORINTERNAL_H
