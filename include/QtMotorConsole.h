@@ -93,6 +93,7 @@ private slots:
 private:
     void setupUiState();
     void applyGratingClosedLoopConfig();
+    void applyForceFeedbackMitConfig();
     void setupPlotScene();
     void setupConnections();
     void resetWaveBuffers();

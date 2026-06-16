@@ -12,13 +12,15 @@ constexpr int kAxis2TorqueLoopAxis = 2;
 constexpr int kAxis4TorqueFollowerAxis = 4;
 constexpr long kPositionDeadbandPulse = 5;
 constexpr long kTorqueLimitPermille = 1000;
-constexpr double kAxis2KpPermillePerPulse = 0.2;
-constexpr double kAxis2KiPermillePerPulseSecond = 0.02;
-constexpr double kAxis2IntegralLimitPermille = 500.0;
+constexpr double kAxis2KiPermillePerPulseSecond = 0.003;
+constexpr double kAxis2IntegralLimitPermille = 120.0;
 constexpr double kAxis2FrictionFeedForwardPermille = 0.0;
-constexpr double kAxis4KpPermillePerPulse = 0.2;
-constexpr double kAxis4KdPermillePerPulsePerSecond = 0.02;
+constexpr double kDefaultMitKpPermillePerPulse = 0.12;
+constexpr double kDefaultMitKdPermillePerPulsePerSecond = 0.12;
 constexpr double kAxis4Axis2TorqueFeedForwardScale = 1.0;
+
+std::atomic<double> g_forceFeedbackMitKp(kDefaultMitKpPermillePerPulse);
+std::atomic<double> g_forceFeedbackMitKd(kDefaultMitKdPermillePerPulsePerSecond);
 
 int CopyAxis2TorqueConfigToAxis4(const QString& modeName)
 {
@@ -84,6 +86,21 @@ double ClampIntegral(double integral)
 long ForceFeedbackAxisMask()
 {
     return (1 << (kAxis2TorqueLoopAxis - 1)) | (1 << (kAxis4TorqueFollowerAxis - 1));
+}
+
+int AxisTorqueDirection(int axis)
+{
+    return axis == kAxis2TorqueLoopAxis ? -1 : 1;
+}
+
+long ToAxisTorqueCommand(int axis, long loopTorque)
+{
+    return (long)AxisTorqueDirection(axis) * loopTorque;
+}
+
+long ToLoopTorqueFeedback(int axis, long axisTorque)
+{
+    return (long)AxisTorqueDirection(axis) * axisTorque;
 }
 
 bool ReadForceFeedbackGrating1(long* position)
@@ -165,7 +182,7 @@ void StopForceFeedbackAxes()
     DisableAxisDirect(kAxis4TorqueFollowerAxis);
 }
 
-long CalculateAxis2Torque(long targetPos, long currentPos, double* integralPermille)
+long CalculateAxis2Torque(long targetPos, long currentPos, long axis2Velocity, double* integralPermille)
 {
     long error = targetPos - currentPos;
     if (std::labs(error) <= kPositionDeadbandPulse)
@@ -175,11 +192,12 @@ long CalculateAxis2Torque(long targetPos, long currentPos, double* integralPermi
     }
 
     const double periodSecond = (double)kForceFeedbackPeriodUs / 1000000.0;
-    double proportional = kAxis2KpPermillePerPulse * (double)error;
+    double proportional = g_forceFeedbackMitKp.load() * (double)error;
+    double derivative = -g_forceFeedbackMitKd.load() * (double)axis2Velocity;
     *integralPermille = ClampIntegral(*integralPermille +
         kAxis2KiPermillePerPulseSecond * (double)error * periodSecond);
 
-    double torque = proportional + *integralPermille;
+    double torque = proportional + *integralPermille + derivative;
     double direction = Sign(torque);
     if (direction == 0.0)
         direction = Sign((double)error);
@@ -198,8 +216,8 @@ long CalculateAxis4Torque(long grating1Position,
     long velocityError = axis2Velocity - axis4Velocity;
     double torque =
         kAxis4Axis2TorqueFeedForwardScale * (double)axis2ActualTorque +
-        kAxis4KpPermillePerPulse * (double)positionError +
-        kAxis4KdPermillePerPulsePerSecond * (double)velocityError;
+        g_forceFeedbackMitKp.load() * (double)positionError +
+        g_forceFeedbackMitKd.load() * (double)velocityError;
 
     return ClampTorque(RoundToLong(torque));
 }
@@ -242,6 +260,18 @@ void StartForceFeedback(long targetGratingPos)
 
     logMessage(QStringLiteral("Force feedback started: grating1 target=%1 pulse, axis2 loop, axis4 torque follower.")
         .arg(targetGratingPos));
+}
+
+void SetForceFeedbackMitConfig(double kp, double kd)
+{
+    if (std::isfinite(kp))
+        g_forceFeedbackMitKp = kp;
+    if (std::isfinite(kd))
+        g_forceFeedbackMitKd = kd;
+
+    logMessage(QStringLiteral("Force feedback MIT config updated: Kp=%1, Kd=%2.")
+        .arg(g_forceFeedbackMitKp.load(), 0, 'g', 8)
+        .arg(g_forceFeedbackMitKd.load(), 0, 'g', 8));
 }
 
 void StartForceFeedback(long targetGrating1Pos, long)
@@ -325,6 +355,7 @@ void ForceFeedback(long targetGratingPos)
     }
 
     double integralPermille = 0.0;
+    bool firstCommandLogged = false;
     auto nextTime = std::chrono::steady_clock::now();
     while (g_bFollowRunning)
     {
@@ -349,21 +380,37 @@ void ForceFeedback(long targetGratingPos)
             continue;
         }
 
-        long axis2TorqueCommand = CalculateAxis2Torque(targetPos, grating1Pos, &integralPermille);
+        long axis2Velocity = ReadVelocity(kAxis2TorqueLoopAxis);
+        long axis2LoopTorqueCommand = CalculateAxis2Torque(targetPos, grating1Pos, axis2Velocity, &integralPermille);
+        long axis2TorqueCommand = ToAxisTorqueCommand(kAxis2TorqueLoopAxis, axis2LoopTorqueCommand);
         SetTargetTorque(kAxis2TorqueLoopAxis,
             axis2TorqueCommand,
             QStringLiteral("Force feedback"),
             QStringLiteral("Set axis2 target torque 6071h"),
             false);
 
-        long axis2Velocity = ReadVelocity(kAxis2TorqueLoopAxis);
-        long axis2ActualTorque = ReadTorque(kAxis2TorqueLoopAxis);
+        long axis2ActualTorque = ToLoopTorqueFeedback(kAxis2TorqueLoopAxis, ReadTorque(kAxis2TorqueLoopAxis));
         long axis4Velocity = ReadVelocity(kAxis4TorqueFollowerAxis);
-        long axis4TorqueCommand = CalculateAxis4Torque(grating1Pos,
+        long axis4LoopTorqueCommand = CalculateAxis4Torque(grating1Pos,
             grating2Pos,
             axis2Velocity,
             axis4Velocity,
             axis2ActualTorque);
+        long axis4TorqueCommand = ToAxisTorqueCommand(kAxis4TorqueFollowerAxis, axis4LoopTorqueCommand);
+        if (!firstCommandLogged)
+        {
+            firstCommandLogged = true;
+            logMessage(QStringLiteral("Force feedback first command: target=%1, grating1=%2, grating2=%3, error=%4, axis2LoopTorque=%5, axis2Torque=%6, axis2ActualLoopTorque=%7, axis4LoopTorque=%8, axis4Torque=%9")
+                .arg(targetPos)
+                .arg(grating1Pos)
+                .arg(grating2Pos)
+                .arg(targetPos - grating1Pos)
+                .arg(axis2LoopTorqueCommand)
+                .arg(axis2TorqueCommand)
+                .arg(axis2ActualTorque)
+                .arg(axis4LoopTorqueCommand)
+                .arg(axis4TorqueCommand));
+        }
         SetTargetTorque(kAxis4TorqueFollowerAxis,
             axis4TorqueCommand,
             QStringLiteral("Force feedback"),

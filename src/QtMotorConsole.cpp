@@ -138,6 +138,8 @@ void QtMotorConsole::setupUiState()
     ui.lineEdit_ForceFriction->setValidator(new QDoubleValidator(-1000000.0, 1000000.0, 6, this));
     ui.lineEdit_ForceFrictionComp->setValidator(new QDoubleValidator(0.0, 1000000.0, 6, this));
     ui.lineEdit_ForceTorqueLimit->setValidator(new QIntValidator(0, 1000, this));
+    ui.lineEdit_ForceMitKp->setValidator(new QDoubleValidator(-1000000.0, 1000000.0, 6, this));
+    ui.lineEdit_ForceMitKd->setValidator(new QDoubleValidator(-1000000.0, 1000000.0, 6, this));
     ui.lineEdit_GratingLoopTarget1->setValidator(new QIntValidator(-1000000000, 1000000000, this));
     ui.lineEdit_GratingLoopTarget2->setValidator(new QIntValidator(-1000000000, 1000000000, this));
     ui.label_ForceFriction->setText(QStringLiteral("Kd"));
@@ -147,6 +149,8 @@ void QtMotorConsole::setupUiState()
     ui.lineEdit_ForceFriction->setText(QStringLiteral("0.00002"));
     ui.lineEdit_ForceFrictionComp->setText(QStringLiteral("30"));
     ui.lineEdit_ForceTorqueLimit->setText(QStringLiteral("900"));
+    ui.lineEdit_ForceMitKp->setText(QStringLiteral("0.12"));
+    ui.lineEdit_ForceMitKd->setText(QStringLiteral("0.12"));
     ui.label_ForceVel->setText(QStringLiteral("光栅1目标"));
     ui.lineEdit_ForceVel->setPlaceholderText(QStringLiteral("光栅1 pulse"));
     ui.label_ForceTarget2->setVisible(false);
@@ -170,6 +174,12 @@ void QtMotorConsole::applyGratingClosedLoopConfig()
         ui.lineEdit_ForceFriction->text().toDouble(),
         ui.lineEdit_ForceFrictionComp->text().toDouble(),
         ui.lineEdit_ForceTorqueLimit->text().toLong());
+}
+
+void QtMotorConsole::applyForceFeedbackMitConfig()
+{
+    SetForceFeedbackMitConfig(ui.lineEdit_ForceMitKp->text().toDouble(),
+        ui.lineEdit_ForceMitKd->text().toDouble());
 }
 
 void QtMotorConsole::setupPlotScene()
@@ -216,6 +226,7 @@ void QtMotorConsole::setupConnections()
     });
 
     connect(ui.pushButton_StartForce, &QPushButton::clicked, this, [this]() {
+        applyForceFeedbackMitConfig();
         StartForceFeedback(ui.lineEdit_ForceVel->text().toLong());
     });
 
@@ -224,12 +235,20 @@ void QtMotorConsole::setupConnections()
     });
 
     connect(ui.lineEdit_ForceVel, &QLineEdit::returnPressed, this, [this]() {
+        applyForceFeedbackMitConfig();
         StartForceFeedback(ui.lineEdit_ForceVel->text().toLong());
     });
 
     connect(ui.lineEdit_ForceTarget2, &QLineEdit::returnPressed, this, [this]() {
+        applyForceFeedbackMitConfig();
         StartForceFeedback(ui.lineEdit_ForceVel->text().toLong());
     });
+
+    auto updateForceFeedbackMitConfig = [this]() {
+        applyForceFeedbackMitConfig();
+    };
+    connect(ui.lineEdit_ForceMitKp, &QLineEdit::returnPressed, this, updateForceFeedbackMitConfig);
+    connect(ui.lineEdit_ForceMitKd, &QLineEdit::returnPressed, this, updateForceFeedbackMitConfig);
 
     auto updateGratingLoopConfig = [this]() {
         applyGratingClosedLoopConfig();

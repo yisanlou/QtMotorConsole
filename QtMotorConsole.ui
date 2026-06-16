@@ -253,6 +253,22 @@
     <property name="text"><string>0</string></property>
     <property name="placeholderText"><string>光栅2 pulse</string></property>
    </widget>
+   <widget class="QLabel" name="label_ForceMitKp">
+    <property name="geometry"><rect><x>18</x><y>52</y><width>42</width><height>24</height></rect></property>
+    <property name="text"><string>MIT Kp</string></property>
+   </widget>
+   <widget class="QLineEdit" name="lineEdit_ForceMitKp">
+    <property name="geometry"><rect><x>62</x><y>52</y><width>50</width><height>24</height></rect></property>
+    <property name="text"><string>0.12</string></property>
+   </widget>
+   <widget class="QLabel" name="label_ForceMitKd">
+    <property name="geometry"><rect><x>120</x><y>52</y><width>42</width><height>24</height></rect></property>
+    <property name="text"><string>MIT Kd</string></property>
+   </widget>
+   <widget class="QLineEdit" name="lineEdit_ForceMitKd">
+    <property name="geometry"><rect><x>168</x><y>52</y><width>62</width><height>24</height></rect></property>
+    <property name="text"><string>0.12</string></property>
+   </widget>
    <widget class="QPushButton" name="pushButton_StartForce">
     <property name="geometry"><rect><x>20</x><y>82</y><width>95</width><height>26</height></rect></property>
     <property name="text"><string>启动力反馈</string></property>
