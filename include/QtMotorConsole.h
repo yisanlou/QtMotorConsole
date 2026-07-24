@@ -41,6 +41,8 @@ private:
         long torque2 = 0;
         long torque3 = 0;
         long torque4 = 0;
+        long targetTorque2 = 0;
+        long targetTorque4 = 0;
         long grating1 = 0;
         long grating2 = 0;
         bool gratingSensor1Triggered = false;
@@ -102,6 +104,7 @@ private:
     void stopSampleThread();
     void sampleLoop();
     void updateGratingSensorStatus(const SampleState& sample);
+    void updateForceFeedbackStatus();
     void drawAxis(double leftMin, double leftMax, double rightMin, double rightMax, bool showRightAxis, const QString& leftTitle, const QBrush& leftBrush);
     void appendWavePoint(QVector<QPointF>* points, double value);
     void updateValueRange(const QVector<QPointF>* points, double* yMin, double* yMax, bool* hasValue);

@@ -101,8 +101,13 @@ static bool ReadGratingRawValue(int grating, long* value)
 static void GratingZeroWorker(int grating)
 {
     const int axis = (grating == 2) ? 4 : 2;
-    const long forwardSpeed = (grating == 2) ? -kGratingZeroFastSpeed : kGratingZeroFastSpeed;
-    const long reverseSpeed = (grating == 2) ? kGratingZeroSlowSpeed : -kGratingZeroSlowSpeed;
+    // Search toward the switch in negative common direction, then leave the
+    // switch in positive common direction. This guarantees both zeroed
+    // grating positions increase when moving away from home.
+    const long forwardSpeed =
+        -(long)CommonToAxisDirection(axis) * kGratingZeroFastSpeed;
+    const long reverseSpeed =
+        (long)CommonToAxisDirection(axis) * kGratingZeroSlowSpeed;
     const QString modeName = QStringLiteral("光栅尺%1归零").arg(grating);
     const QString sensorName = GratingSensorName(grating);
 

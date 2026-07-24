@@ -133,26 +133,54 @@ void QtMotorConsole::setupUiState()
     ui.lineEdit_ForceVel->setValidator(new QIntValidator(-1000000000, 1000000000, this));
     ui.lineEdit_ForceTarget2->setValidator(new QIntValidator(-1000000000, 1000000000, this));
     ui.lineEdit_ForceKp->setValidator(new QDoubleValidator(-1000000.0, 1000000.0, 6, this));
-    ui.lineEdit_ForceKi->setValidator(new QDoubleValidator(-1000000.0, 1000000.0, 6, this));
-    ui.lineEdit_ForceILimit->setValidator(new QDoubleValidator(0.0, 1000000.0, 6, this));
+    ui.lineEdit_ForceKi->setValidator(new QDoubleValidator(0.0, 1000000000.0, 3, this));
+    ui.lineEdit_ForceILimit->setValidator(new QDoubleValidator(0.0, 1000000000.0, 3, this));
     ui.lineEdit_ForceFriction->setValidator(new QDoubleValidator(-1000000.0, 1000000.0, 6, this));
     ui.lineEdit_ForceFrictionComp->setValidator(new QDoubleValidator(0.0, 1000000.0, 6, this));
-    ui.lineEdit_ForceTorqueLimit->setValidator(new QIntValidator(0, 1000, this));
-    ui.lineEdit_ForceMitKp->setValidator(new QDoubleValidator(-1000000.0, 1000000.0, 6, this));
-    ui.lineEdit_ForceMitKd->setValidator(new QDoubleValidator(-1000000.0, 1000000.0, 6, this));
+    ui.lineEdit_ForceTorqueLimit->setValidator(new QIntValidator(0, 1000000, this));
+    ui.lineEdit_ForceMitKp->setValidator(new QDoubleValidator(0.0, 1000000.0, 6, this));
+    ui.lineEdit_ForceMitKd->setValidator(new QDoubleValidator(0.0, 1000000.0, 6, this));
+    ui.lineEdit_ForceSyncKp->setValidator(new QDoubleValidator(0.0, 1000000.0, 6, this));
+    ui.lineEdit_ForceSyncKd->setValidator(new QDoubleValidator(0.0, 1000000.0, 6, this));
+    ui.lineEdit_ForcePlanVelocity->setValidator(new QDoubleValidator(1.0, 1000000000.0, 1, this));
+    ui.lineEdit_ForceTorqueLimit2->setValidator(new QIntValidator(1, 1000, this));
     ui.lineEdit_GratingLoopTarget1->setValidator(new QIntValidator(-1000000000, 1000000000, this));
     ui.lineEdit_GratingLoopTarget2->setValidator(new QIntValidator(-1000000000, 1000000000, this));
-    ui.label_ForceFriction->setText(QStringLiteral("Kd"));
-    ui.lineEdit_ForceKp->setText(QStringLiteral("0.0001"));
-    ui.lineEdit_ForceKi->setText(QStringLiteral("0.00001"));
-    ui.lineEdit_ForceILimit->setText(QStringLiteral("200"));
+    ui.label_ForceKp->setText(QStringLiteral("跟随比例"));
+    ui.label_ForceKi->setText(QStringLiteral("规划速度"));
+    ui.label_ForceILimit->setText(QStringLiteral("规划加速"));
+    ui.lineEdit_ForceKp->setText(QStringLiteral("1"));
+    ui.lineEdit_ForceKi->setText(QStringLiteral("50000"));
+    ui.lineEdit_ForceILimit->setText(QStringLiteral("200000"));
     ui.lineEdit_ForceFriction->setText(QStringLiteral("0.00002"));
     ui.lineEdit_ForceFrictionComp->setText(QStringLiteral("30"));
-    ui.lineEdit_ForceTorqueLimit->setText(QStringLiteral("900"));
-    ui.lineEdit_ForceMitKp->setText(QStringLiteral("0.12"));
-    ui.lineEdit_ForceMitKd->setText(QStringLiteral("0.12"));
-    ui.label_ForceVel->setText(QStringLiteral("光栅1目标"));
+    ui.lineEdit_ForceTorqueLimit->setText(QStringLiteral("1000"));
+    ui.label_ForceKi->setVisible(true);
+    ui.lineEdit_ForceKi->setVisible(true);
+    ui.label_ForceILimit->setVisible(true);
+    ui.lineEdit_ForceILimit->setVisible(true);
+    ui.label_ForceFriction->setVisible(false);
+    ui.lineEdit_ForceFriction->setVisible(false);
+    ui.label_ForceFrictionComp->setVisible(false);
+    ui.lineEdit_ForceFrictionComp->setVisible(false);
+    ui.label_ForceTorqueLimit->setVisible(false);
+    ui.lineEdit_ForceTorqueLimit->setVisible(false);
+    ui.lineEdit_ForceMitKp->setText(QStringLiteral("0.0015"));
+    ui.lineEdit_ForceMitKd->setText(QStringLiteral("0.001"));
+    ui.lineEdit_ForceSyncKp->setText(QStringLiteral("0.001"));
+    ui.lineEdit_ForceSyncKd->setText(QStringLiteral("0.0015"));
+    ui.label_ForceSyncKp->setText(QStringLiteral("同步Kp"));
+    ui.label_ForceSyncKd->setText(QStringLiteral("同步Kd"));
+    ui.lineEdit_ForceSyncKp->setEnabled(true);
+    ui.lineEdit_ForceSyncKd->setEnabled(true);
+    ui.lineEdit_ForceSyncKp->setToolTip(QStringLiteral("光栅1与光栅2后续位移差的位置修正增益"));
+    ui.lineEdit_ForceSyncKd->setToolTip(QStringLiteral("光栅1与光栅2相对速度差的阻尼增益"));
+    ui.lineEdit_ForcePlanVelocity->setText(QStringLiteral("100000"));
+    ui.lineEdit_ForceTorqueLimit2->setText(QStringLiteral("120"));
+    ui.label_ForceVel->setText(QStringLiteral("光栅1绝对目标"));
     ui.lineEdit_ForceVel->setPlaceholderText(QStringLiteral("光栅1 pulse"));
+    ui.label_GratingLoopTarget2->setText(QStringLiteral("光栅2跟随1"));
+    ui.lineEdit_GratingLoopTarget2->setVisible(false);
     ui.label_ForceTarget2->setVisible(false);
     ui.lineEdit_ForceTarget2->setVisible(false);
     ui.lineEdit_PosTarget->setValidator(new QIntValidator(-1000000000, 1000000000, this));
@@ -178,8 +206,12 @@ void QtMotorConsole::applyGratingClosedLoopConfig()
 
 void QtMotorConsole::applyForceFeedbackMitConfig()
 {
-    SetForceFeedbackMitConfig(ui.lineEdit_ForceMitKp->text().toDouble(),
-        ui.lineEdit_ForceMitKd->text().toDouble());
+    SetForceFeedbackSyncConfig(ui.lineEdit_ForceMitKp->text().toDouble(),
+        ui.lineEdit_ForceMitKd->text().toDouble(),
+        ui.lineEdit_ForceSyncKp->text().toDouble(),
+        ui.lineEdit_ForceSyncKd->text().toDouble(),
+        ui.lineEdit_ForcePlanVelocity->text().toDouble(),
+        ui.lineEdit_ForceTorqueLimit2->text().toLong());
 }
 
 void QtMotorConsole::setupPlotScene()
@@ -222,6 +254,7 @@ void QtMotorConsole::setupConnections()
 
     connect(ui.pushButton_Stop, &QPushButton::clicked, this, [this]() {
         stopSampleThread();
+        StopRecord();
         CloseCard();
     });
 
@@ -249,6 +282,10 @@ void QtMotorConsole::setupConnections()
     };
     connect(ui.lineEdit_ForceMitKp, &QLineEdit::returnPressed, this, updateForceFeedbackMitConfig);
     connect(ui.lineEdit_ForceMitKd, &QLineEdit::returnPressed, this, updateForceFeedbackMitConfig);
+    connect(ui.lineEdit_ForceSyncKp, &QLineEdit::returnPressed, this, updateForceFeedbackMitConfig);
+    connect(ui.lineEdit_ForceSyncKd, &QLineEdit::returnPressed, this, updateForceFeedbackMitConfig);
+    connect(ui.lineEdit_ForcePlanVelocity, &QLineEdit::returnPressed, this, updateForceFeedbackMitConfig);
+    connect(ui.lineEdit_ForceTorqueLimit2, &QLineEdit::returnPressed, this, updateForceFeedbackMitConfig);
 
     auto updateGratingLoopConfig = [this]() {
         applyGratingClosedLoopConfig();
@@ -316,6 +353,8 @@ void QtMotorConsole::setupConnections()
     });
 
     connect(ui.pushButton_DisableAxis, &QPushButton::clicked, this, []() {
+        if (g_bFollowRunning || g_forceFeedbackThread.joinable())
+            StopForceFeedback();
         StopAllGratingClosedLoop();
         for (int axis = 1; axis <= 4; axis++)
             DisableAxis(axis);
@@ -426,6 +465,7 @@ void QtMotorConsole::updateWave()
 
     m_lastRenderedSampleIndex = sample.sampleIndex;
     updateGratingSensorStatus(sample);
+    updateForceFeedbackStatus();
 
     long pos = sample.pos1;
     long vel = sample.vel1;
@@ -464,7 +504,9 @@ void QtMotorConsole::updateWave()
         sample.vel4,
         sample.torque4,
         sample.grating1,
-        sample.grating2);
+        sample.grating2,
+        sample.targetTorque2,
+        sample.targetTorque4);
 
     m_timeIndex++;
     appendWavePoint(&m_posPoints, quantizeDisplayValue(pos * 0.001, kPositionDisplayStep));
@@ -794,7 +836,7 @@ void QtMotorConsole::stopSampleThread()
 
 void QtMotorConsole::sampleLoop()
 {
-    SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
+    SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
 
     long long sampleIndex = 0;
     auto nextTime = std::chrono::steady_clock::now();
@@ -812,7 +854,25 @@ void QtMotorConsole::sampleLoop()
 
         SampleState sample;
         sample.sampleIndex = sampleIndex++;
-        MotorSample motorSample = ReadFastSample();
+        MotorSample motorSample;
+        if (g_bFollowRunning)
+        {
+            // The force-feedback thread owns all controller-card calls while
+            // synchronizing. Consuming its snapshot avoids concurrent SDO/PDO
+            // traffic from this 3 ms UI/recording sampler.
+            if (!ReadForceFeedbackSample(&motorSample))
+            {
+                const auto now = std::chrono::steady_clock::now();
+                if (now > nextTime + std::chrono::milliseconds(3))
+                    nextTime = now;
+                std::this_thread::sleep_until(nextTime);
+                continue;
+            }
+        }
+        else
+        {
+            motorSample = ReadFastSample();
+        }
         sample.pos1 = motorSample.pos1;
         sample.pos2 = motorSample.pos2;
         sample.pos3 = motorSample.pos3;
@@ -825,6 +885,8 @@ void QtMotorConsole::sampleLoop()
         sample.torque2 = motorSample.torque2;
         sample.torque3 = motorSample.torque3;
         sample.torque4 = motorSample.torque4;
+        sample.targetTorque2 = motorSample.targetTorque2;
+        sample.targetTorque4 = motorSample.targetTorque4;
         sample.grating1 = motorSample.grating1;
         sample.grating2 = motorSample.grating2;
         sample.gratingSensor1Triggered = motorSample.gratingSensor1Triggered;
@@ -848,6 +910,9 @@ void QtMotorConsole::sampleLoop()
         {
         }
 
+        const auto now = std::chrono::steady_clock::now();
+        if (now > nextTime + std::chrono::milliseconds(3))
+            nextTime = now;
         std::this_thread::sleep_until(nextTime);
     }
 }
@@ -860,11 +925,46 @@ void QtMotorConsole::updatePerformancePanel()
         sample = m_latestSample;
     }
     updateGratingSensorStatus(sample);
+    updateForceFeedbackStatus();
 
     ui.label_UiExecValue->setText(QString("%1 us").arg(m_uiExecMaxUs));
     ui.label_SampleExecValue->setText(QString("%1 us").arg(m_sampleExecMaxUs.exchange(0)));
-    ui.label_ForceExecValue->setText(QString("%1 us").arg(ConsumeForceFeedbackExecMaxUs()));
+    const ForceFeedbackTiming forceTiming = ConsumeForceFeedbackTiming();
+    ui.label_ForceExecValue->setText(QString("%1 us").arg(forceTiming.totalMaxUs));
+    ui.label_ForceExecValue->setToolTip(
+        QStringLiteral("光栅读取最大=%1 us\n轴2实际力矩读取最大=%2 us\n"
+            "电机快照最大=%3 us\n两轴6071写入最大=%4 us\nMC_Update最大=%5 us")
+            .arg(forceTiming.gratingReadMaxUs)
+            .arg(forceTiming.actualTorqueReadMaxUs)
+            .arg(forceTiming.motorSampleMaxUs)
+            .arg(forceTiming.torqueWriteMaxUs)
+            .arg(forceTiming.updateMaxUs));
     m_uiExecMaxUs = 0;
+}
+
+void QtMotorConsole::updateForceFeedbackStatus()
+{
+    const ForceFeedbackStatus status = GetForceFeedbackStatus();
+    if (!status.running)
+    {
+        ui.label_ForceStatus->setText(QStringLiteral("已停止"));
+        ui.label_ForceStatus->setToolTip(QString());
+        ui.label_ForceStatus->setStyleSheet(QStringLiteral("color: #666666;"));
+        return;
+    }
+
+    ui.label_ForceStatus->setText(QStringLiteral("主从力矩 q1=%1 q2=%2 Δ=%3")
+        .arg(status.grating1Position)
+        .arg(status.grating2Position)
+        .arg(status.synchronizationError));
+    ui.label_ForceStatus->setToolTip(QStringLiteral("目标=%1，规划=%2，轴2目标/实际力矩=%3/%4，轴4目标/实际力矩=%5/%6")
+        .arg(status.targetPosition)
+        .arg(status.plannedPosition)
+        .arg(status.axis2TorqueCommand)
+        .arg(status.axis2ActualTorque)
+        .arg(status.axis4TorqueCommand)
+        .arg(status.axis4ActualTorque));
+    ui.label_ForceStatus->setStyleSheet(QStringLiteral("color: #087f23; font-weight: bold;"));
 }
 
 void QtMotorConsole::updateGratingSensorStatus(const SampleState& sample)
@@ -894,6 +994,7 @@ void QtMotorConsole::updateGratingSensorStatus(const SampleState& sample)
 void QtMotorConsole::closeEvent(QCloseEvent* event)
 {
     stopSampleThread();
+    StopRecord();
     CloseCard();
     QWidget::closeEvent(event);
 }

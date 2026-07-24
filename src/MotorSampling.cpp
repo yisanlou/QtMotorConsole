@@ -1,5 +1,7 @@
 ﻿#include "MotorInternal.h"
 
+#include <algorithm>
+
 #pragma execution_character_set("utf-8")
 
 long ReadPosition(int axis)
@@ -36,6 +38,118 @@ bool ReadGratingEncoder(int encoderIndex, long* value, int* ret)
         return false;
 
     *value = RoundToLong(rawValue);
+    return true;
+}
+
+bool ReadGratingPosition(int grating, long* value, int* ret)
+{
+    if ((grating != 1 && grating != 2) || !value)
+        return false;
+
+    const int encoderIndex = grating == 2 ? g_grating2EncoderIndex : 1;
+    long rawValue = 0;
+    if (!ReadGratingEncoder(encoderIndex, &rawValue, ret))
+        return false;
+
+    const long offset = grating == 2
+        ? g_gratingOffset2.load()
+        : g_gratingOffset1.load();
+    const long rawMinusOffset = rawValue - offset;
+
+    // Save, display and control all use this same zeroed common coordinate.
+    *value = (long)GratingRawToCommonDirection(grating) * rawMinusOffset;
+    return true;
+}
+
+bool ReadBothGratingPositions(long* grating1, long* grating2)
+{
+    if (!grating1 || !grating2 || g_grating2EncoderIndex < 1)
+        return false;
+
+    double encoderPosition[16] = {};
+    if (g_grating2EncoderIndex > (int)(sizeof(encoderPosition) / sizeof(encoderPosition[0])))
+        return false;
+
+    const int ret = g_MultiCard.MC_GetEncPos(
+        1,
+        encoderPosition,
+        (short)g_grating2EncoderIndex);
+    if (ret != 0)
+        return false;
+
+    const long raw1 = RoundToLong(encoderPosition[0]);
+    const long raw2 = RoundToLong(encoderPosition[g_grating2EncoderIndex - 1]);
+    *grating1 = (long)GratingRawToCommonDirection(1) *
+        (raw1 - g_gratingOffset1.load());
+    *grating2 = (long)GratingRawToCommonDirection(2) *
+        (raw2 - g_gratingOffset2.load());
+    return true;
+}
+
+bool CaptureForceFeedbackSample(long grating1,
+    long grating2,
+    long axis2ActualTorque,
+    long axis4ActualTorque,
+    long axis2TorqueCommand,
+    long axis4TorqueCommand)
+{
+    int activeAxisCount = std::max(0, std::min(kMaxAxisCount, g_activeAxisCount.load()));
+    if (activeAxisCount <= 0)
+        return false;
+
+    MotorSample sample;
+    {
+        std::lock_guard<std::mutex> lock(g_forceFeedbackSampleMutex);
+        if (g_forceFeedbackSampleValid)
+            sample = g_forceFeedbackSample;
+    }
+
+    double encPos[kMaxAxisCount] = {};
+    double encVelPulsePerMs[kMaxAxisCount] = {};
+    const bool motorFeedbackValid =
+        g_MultiCard.MC_GetAxisEncPos(1, encPos, (short)activeAxisCount) == 0 &&
+        g_MultiCard.MC_GetAxisEncVel(1, encVelPulsePerMs, (short)activeAxisCount) == 0;
+    if (motorFeedbackValid)
+    {
+        long* positions[kMaxAxisCount] = {
+            &sample.pos1, &sample.pos2, &sample.pos3, &sample.pos4
+        };
+        long* velocities[kMaxAxisCount] = {
+            &sample.vel1, &sample.vel2, &sample.vel3, &sample.vel4
+        };
+        for (int i = 0; i < activeAxisCount; ++i)
+        {
+            *positions[i] = RoundToLong(encPos[i]);
+            *velocities[i] = RoundToLong(encVelPulsePerMs[i] * 1000.0);
+        }
+    }
+
+    sample.torque1 = g_sampleTorqueCache[0].load();
+    sample.torque2 = axis2ActualTorque;
+    sample.torque3 = g_sampleTorqueCache[2].load();
+    sample.torque4 = axis4ActualTorque;
+    sample.targetTorque2 = axis2TorqueCommand;
+    sample.targetTorque4 = axis4TorqueCommand;
+    sample.grating1 = grating1;
+    sample.grating2 = grating2;
+
+    {
+        std::lock_guard<std::mutex> lock(g_forceFeedbackSampleMutex);
+        g_forceFeedbackSample = sample;
+        g_forceFeedbackSampleValid = true;
+    }
+    return motorFeedbackValid;
+}
+
+bool ReadForceFeedbackSample(MotorSample* sample)
+{
+    if (!sample)
+        return false;
+
+    std::lock_guard<std::mutex> lock(g_forceFeedbackSampleMutex);
+    if (!g_forceFeedbackSampleValid)
+        return false;
+    *sample = g_forceFeedbackSample;
     return true;
 }
 
@@ -103,9 +217,9 @@ MotorSample ReadFastSample()
 
     int gratingRet = 0;
     long gratingValue = 0;
-    if (ReadGratingEncoder(1, &gratingValue, &gratingRet))
+    if (ReadGratingPosition(1, &gratingValue, &gratingRet))
     {
-        sample.grating1 = g_gratingOffset1.load() - gratingValue;
+        sample.grating1 = gratingValue;
     }
     else if (!g_grating1ReadErrorLogged)
     {
@@ -113,22 +227,21 @@ MotorSample ReadFastSample()
         logMessage(QStringLiteral("光栅尺1：MC_GetEncPos(1)读取失败，返回值=%1").arg(gratingRet));
     }
 
-    if (ReadGratingEncoder(g_grating2EncoderIndex, &gratingValue, &gratingRet))
+    if (ReadGratingPosition(2, &gratingValue, &gratingRet))
     {
-        long grating2Raw = gratingValue;
-        sample.grating2 = g_gratingOffset2.load() - grating2Raw;
-        if (grating2Raw == g_grating2LastValue)
+        sample.grating2 = gratingValue;
+        if (gratingValue == g_grating2LastValue)
             g_grating2UnchangedCount++;
         else
         {
-            g_grating2LastValue = grating2Raw;
+            g_grating2LastValue = gratingValue;
             g_grating2UnchangedCount = 0;
         }
     }
     else if (!g_grating2ReadErrorLogged)
     {
         g_grating2ReadErrorLogged = true;
-        sample.grating2 = g_gratingOffset2.load() - g_grating2LastValue;
+        sample.grating2 = g_grating2LastValue;
         g_grating2UnchangedCount++;
         logMessage(QStringLiteral("光栅尺2：MC_GetEncPos(%1)读取失败，返回值=%2")
             .arg(g_grating2EncoderIndex)
@@ -136,7 +249,7 @@ MotorSample ReadFastSample()
     }
     else
     {
-        sample.grating2 = g_gratingOffset2.load() - g_grating2LastValue;
+        sample.grating2 = g_grating2LastValue;
         g_grating2UnchangedCount++;
     }
 
@@ -145,19 +258,19 @@ MotorSample ReadFastSample()
 
     if (activeAxisCount >= 1)
     {
-        sample.torque1 = g_sampleTorqueCache[0];
+        sample.torque1 = g_sampleTorqueCache[0].load();
     }
     if (activeAxisCount >= 2)
     {
-        sample.torque2 = g_sampleTorqueCache[1];
+        sample.torque2 = g_sampleTorqueCache[1].load();
     }
     if (activeAxisCount >= 3)
     {
-        sample.torque3 = g_sampleTorqueCache[2];
+        sample.torque3 = g_sampleTorqueCache[2].load();
     }
     if (activeAxisCount >= 4)
     {
-        sample.torque4 = g_sampleTorqueCache[3];
+        sample.torque4 = g_sampleTorqueCache[3].load();
     }
     return sample;
 }

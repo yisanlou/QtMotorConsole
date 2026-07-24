@@ -20,7 +20,12 @@ bool PrepareTorqueModeCommandSource(int axis, const QString& modeName)
     if (ret == 0 && source == kTorqueCommandSourceBus6080)
         return true;
 
-    int writeRet = g_MultiCard.MC_ECatSetSdoValue(axis, kIndexTorqueCommandSource, 0x00, kTorqueCommandSourceBus6080, 2);
+    int writeRet = g_MultiCard.MC_ECatSetSdoValue(
+        axis,
+        kIndexTorqueCommandSource,
+        0x00,
+        kTorqueCommandSourceBus6080,
+        2);
     if (writeRet != 0)
     {
         logMessage(QStringLiteral("%1：PA25(0x2019)当前值=%2，设置为总线力矩来源3失败，返回值=%3；将继续尝试使能，请在驱动器参数中确认PA25=3")
@@ -37,7 +42,6 @@ bool PrepareTorqueModeCommandSource(int axis, const QString& modeName)
         logMessage(QStringLiteral("%1：PA25(0x2019)写入后读回=%2，期望=3；将继续尝试使能，如力矩不响应请在驱动器面板保存PA25=3并重启")
             .arg(modeName)
             .arg(verifySource));
-        return true;
     }
 
     return true;
@@ -220,8 +224,18 @@ void DisableAxis(int axis)
     if (!IsValidAxis(axis))
         return;
 
+    if ((axis == 2 || axis == 4) &&
+        (g_bFollowRunning || g_forceFeedbackThread.joinable()))
+    {
+        StopForceFeedback();
+    }
+    if (axis == 2)
+        StopGratingClosedLoop(1);
+    else if (axis == 4)
+        StopGratingClosedLoop(2);
+
     DisableAxisDirect(axis);
-    logMessage(QStringLiteral("当前电机已失能！"));
+    logMessage(QStringLiteral("电机%1已失能。").arg(axis));
 }
 
 

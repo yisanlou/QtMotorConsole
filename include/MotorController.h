@@ -18,6 +18,13 @@ void StopForceFeedback();
 void ForceFeedback(long targetGratingPos);
 void ForceFeedback(long targetGrating1Pos, long targetGrating2Pos);
 void SetForceFeedbackMitConfig(double kp, double kd);
+void SetForceFeedbackSyncConfig(double masterKp,
+    double masterKd,
+    double syncKp,
+    double syncKd,
+    double planVelocity,
+    long torqueLimit);
+ForceFeedbackStatus GetForceFeedbackStatus();
 void SetGratingClosedLoopConfig(double kp, double ki, double integralLimit, double kd, double frictionCompensation, long torqueLimit);
 void StartGratingClosedLoop(int grating, long targetPos);
 void StopGratingClosedLoop(int grating);
@@ -33,6 +40,7 @@ long ReadPosition(int axis);
 long ReadVelocity(int axis);
 long ReadTorque(int axis);
 MotorSample ReadFastSample();
+bool ReadForceFeedbackSample(MotorSample* sample);
 
 // 日志输出函数
 void logMessage(const QString& msg);
@@ -41,6 +49,7 @@ void logMessage(const QString& msg);
 bool ConfigServo();
 bool IsCardOpened();
 long long ConsumeForceFeedbackExecMaxUs();
+ForceFeedbackTiming ConsumeForceFeedbackTiming();
 long ReadOperationMode(int axis);
 
 #endif // MOTORCONTROLLER_H

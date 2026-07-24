@@ -21,7 +21,9 @@ void RecordDataSample(long long timeIndex,
     long vel4,
     long torque4,
     long grating1,
-    long grating2);
+    long grating2,
+    long targetTorque2,
+    long targetTorque4);
 
 
 

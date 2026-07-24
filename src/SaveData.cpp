@@ -38,7 +38,10 @@ void StartRecord()
         << " motor2_pos motor2_vel motor2_torque"
         << " motor3_pos motor3_vel motor3_torque"
         << " motor4_pos motor4_vel motor4_torque"
-        << " grating1_pos grating2_pos\n";
+        // Both grating columns are zeroed common-direction positions:
+        // direction * (raw encoder value - homing offset).
+        << " grating1_pos grating2_pos"
+        << " motor2_target_torque motor4_target_torque\n";
     g_recording = true;
 
     logMessage(QStringLiteral("开始写入: ") + fileName);
@@ -84,7 +87,9 @@ void RecordDataSample(long long timeIndex,
     long vel4,
     long torque4,
     long grating1,
-    long grating2)
+    long grating2,
+    long targetTorque2,
+    long targetTorque4)
 {
     QMutexLocker locker(&g_recordMutex);
 
@@ -104,7 +109,11 @@ void RecordDataSample(long long timeIndex,
         << " " << pos4
         << " " << vel4
         << " " << torque4
+        // These values come from ReadGratingPosition, so both increase in
+        // the same physical motion direction after homing.
         << " " << grating1
         << " " << grating2
+        << " " << targetTorque2
+        << " " << targetTorque4
         << "\n";
 }

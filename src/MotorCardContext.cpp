@@ -11,6 +11,11 @@ std::atomic_long g_forceFeedbackTargetVel(0);
 std::atomic_long g_forceFeedbackTargetGrating2(0);
 std::atomic_long g_forceFeedbackCurrentVel(0);
 std::atomic_llong g_forceFeedbackExecMaxUs(0);
+std::atomic_llong g_forceFeedbackGratingReadMaxUs(0);
+std::atomic_llong g_forceFeedbackActualTorqueReadMaxUs(0);
+std::atomic_llong g_forceFeedbackMotorSampleMaxUs(0);
+std::atomic_llong g_forceFeedbackTorqueWriteMaxUs(0);
+std::atomic_llong g_forceFeedbackUpdateMaxUs(0);
 std::thread g_forceFeedbackThread;
 std::atomic_bool g_gratingZeroRunning(false);
 std::thread g_gratingZeroThread;
@@ -21,7 +26,7 @@ QTextBrowser* g_logWidget = nullptr;  // 先初始化为 nullptr
 AxisWorkMode g_axisMode[kMaxAxisCount + 1] = {};
 std::atomic_int g_activeAxisCount(0);
 std::atomic_bool g_cardClosing(false);
-long g_sampleTorqueCache[kMaxAxisCount] = {};
+std::atomic_long g_sampleTorqueCache[kMaxAxisCount] = {};
 int g_nextSampleTorqueAxis = 1;
 bool g_grating1ReadErrorLogged = false;
 bool g_grating2ReadErrorLogged = false;
@@ -33,6 +38,51 @@ std::atomic_long g_gratingOffset2(0);
 std::atomic_long g_uiGrating1(0);
 std::atomic_long g_uiGrating2(0);
 std::atomic_bool g_uiGratingSampleValid(false);
+std::mutex g_forceFeedbackSampleMutex;
+MotorSample g_forceFeedbackSample;
+bool g_forceFeedbackSampleValid = false;
+
+namespace {
+
+bool WaitEtherCATInitComplete(int timeoutMs)
+{
+    short currentSlave = -1;
+    short mode = 0;
+    short modeStep = 0;
+    int ret = -1;
+    int modesRet = -1;
+    long supportedModes = 0;
+    const ULONGLONG startTick = GetTickCount64();
+
+    do
+    {
+        ret = g_MultiCard.MC_ECatGetInitStep(
+            &currentSlave, &mode, &modeStep);
+        if (ret == 0 && currentSlave == 0)
+        {
+            supportedModes =
+                ReadSdoLong(1, 0x6502, 0x00, &modesRet);
+            if (modesRet == 0 && supportedModes != 0)
+            {
+                logMessage(QStringLiteral("EtherCAT初始化完成，耗时=%1 ms。")
+                    .arg(GetTickCount64() - startTick + 600));
+                return true;
+            }
+        }
+        Sleep(100);
+    } while (GetTickCount64() - startTick < (ULONGLONG)timeoutMs);
+
+    logMessage(QStringLiteral("EtherCAT初始化等待超时：返回值=%1，当前站=%2，模式=%3，子步骤=%4，轴1支持模式=0x%5(ret=%6)。")
+        .arg(ret)
+        .arg(currentSlave)
+        .arg(mode)
+        .arg(modeStep)
+        .arg((unsigned long)supportedModes, 8, 16, QChar('0'))
+        .arg(modesRet));
+    return false;
+}
+
+}
 
 void ResetFastSampleCache()
 {
@@ -48,6 +98,11 @@ void ResetFastSampleCache()
     g_uiGrating1 = 0;
     g_uiGrating2 = 0;
     g_uiGratingSampleValid = false;
+    {
+        std::lock_guard<std::mutex> lock(g_forceFeedbackSampleMutex);
+        g_forceFeedbackSample = MotorSample();
+        g_forceFeedbackSampleValid = false;
+    }
 }
 
 bool IsValidAxis(int axis)
@@ -94,10 +149,15 @@ void OpenCard()
     g_MultiCard.MC_SetCommuTimer(3);
     Sleep(100);
     res = g_MultiCard.MC_ECatInit();
-    Sleep(600);
     if (res != 0)
     {
         logMessage(QStringLiteral("EtherCAT init failed，返回值=%1。").arg(res));
+        CloseCard();
+        return;
+    }
+    Sleep(600);
+    if (!WaitEtherCATInitComplete(45000))
+    {
         CloseCard();
         return;
     }
